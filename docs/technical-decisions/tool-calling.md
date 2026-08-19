@@ -41,6 +41,14 @@ Tool Calling이 실제로 어떤 실행 구조를 가지는지 확인한다.
 - Tool 실행 결과를 모델에 다시 전달하자 해당 데이터를 기반으로 최종 자연어 응답을 생성했다.
 - Tool 호출과 실행 결과는 `call_id`를 통해 연결되는 것을 확인했다.
 
+- 고객 이름만 제공된 요청에서 모델은 먼저 `get_customer`를 호출했다.
+- `get_customer` 실행 결과로 반환된 `customer_id`를 바탕으로
+  `get_consultations`를 추가 호출하는 것을 확인했다.
+- 앞선 Tool의 결과가 다음 Tool의 입력으로 필요한 경우,
+  모델이 여러 번의 Tool 호출을 순차적으로 이어갈 수 있음을 확인했다.
+- 두 번째 응답이 다시 `function_call`인 경우 `output_text`는 비어 있으며,
+  추가 Tool 실행이 필요하다.
+
 ## 발견한 문제
 
 TODO
