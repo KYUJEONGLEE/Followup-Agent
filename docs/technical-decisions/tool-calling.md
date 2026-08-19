@@ -34,8 +34,10 @@ Tool Calling이 실제로 어떤 실행 구조를 가지는지 확인한다.
 
 ## 관찰 결과
 
-TODO
-
+- 자연어 요청 `"김민수 고객 정보를 알려줘"`에 대해 모델이 `get_customer` Tool을 선택했다.
+- Tool을 직접 실행하는 대신 `function_call`을 반환했다.
+- Tool arguments는 JSON 객체가 아닌 JSON 문자열 형태로 반환되었다.
+- Tool 호출마다 `call_id`가 함께 반환되었다.
 
 ## 발견한 문제
 
