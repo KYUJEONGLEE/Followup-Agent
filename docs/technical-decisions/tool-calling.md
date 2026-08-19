@@ -34,10 +34,12 @@ Tool Calling이 실제로 어떤 실행 구조를 가지는지 확인한다.
 
 ## 관찰 결과
 
-- 자연어 요청 `"김민수 고객 정보를 알려줘"`에 대해 모델이 `get_customer` Tool을 선택했다.
-- Tool을 직접 실행하는 대신 `function_call`을 반환했다.
-- Tool arguments는 JSON 객체가 아닌 JSON 문자열 형태로 반환되었다.
-- Tool 호출마다 `call_id`가 함께 반환되었다.
+- `"김민수 고객 정보를 알려줘"` 요청에서 모델이 `get_customer` Tool을 선택했다.
+- 모델은 Tool을 직접 실행하지 않고 `get_customer`와 `{"name":"김민수"}` 인자를 반환했다.
+- Tool arguments는 JSON 문자열로 반환되어 애플리케이션에서 파싱이 필요했다.
+- 실제 `getCustomer()` 함수 실행은 애플리케이션에서 수행했다.
+- Tool 실행 결과를 모델에 다시 전달하자 해당 데이터를 기반으로 최종 자연어 응답을 생성했다.
+- Tool 호출과 실행 결과는 `call_id`를 통해 연결되는 것을 확인했다.
 
 ## 발견한 문제
 
