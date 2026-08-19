@@ -4,12 +4,16 @@ import OpenAI from "openai";
 const client = new OpenAI();
 
 function getCustomer(name: string) {
-    return {
-        id: "C001",
-        name,
-        lastVisitAt: "2026-08-01",
-        status: "active",
-    };
+    const customers = [
+        {
+            id: "C001",
+            name: "김민수",
+            lastVisitAt: "2026-08-01",
+            status: "active",
+        },
+    ];
+
+    return customers.find((customer) => customer.name === name) ?? null;
 }
 
 function getConsultations(customerId: string) {
@@ -85,7 +89,7 @@ function executeTool(name: string, args: any) {
 async function main() {
     let response = await client.responses.create({
         model: "gpt-5.6",
-        input: "김민수 고객의 기본 정보와 최근 상담 내용을 같이 알려줘.",
+        input: "박철수 고객의 기본 정보와 최근 상담 내용을 알려줘.",
         tools,
         parallel_tool_calls: false,
     });
