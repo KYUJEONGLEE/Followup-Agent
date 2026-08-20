@@ -112,15 +112,39 @@ async function main() {
             console.log(`\nTool 호출: ${toolCall.name}`);
             console.log("Arguments:", args);
 
-            const result = executeTool(toolCall.name, args);
+            try {
+                const result = executeTool(toolCall.name, args);
 
-            console.log("실행 결과:", result);
+                console.log("실행 결과:", result);
 
-            return {
-                type: "function_call_output" as const,
-                call_id: toolCall.call_id,
-                output: JSON.stringify(result),
-            };
+                return {
+                    type: "function_call_output" as const,
+                    call_id: toolCall.call_id,
+                    output: JSON.stringify({
+                        success: true,
+                        data: result,
+                    }),
+                };
+            } catch (error) {
+                const message =
+                    error instanceof Error
+                        ? error.message
+                        : "알 수 없는 Tool 실행 오류";
+
+                console.log("Tool 실행 실패:", message);
+
+                return {
+                    type: "function_call_output" as const,
+                    call_id: toolCall.call_id,
+                    output: JSON.stringify({
+                        success: false,
+                        error: {
+                            code: "TOOL_EXECUTION_FAILED",
+                            message,
+                        },
+                    }),
+                };
+            }
         });
 
         response = await client.responses.create({
