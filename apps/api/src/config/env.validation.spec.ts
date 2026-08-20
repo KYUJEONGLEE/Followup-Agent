@@ -3,17 +3,21 @@ import { validateEnvironment } from './env.validation';
 
 const databaseUrl =
   'postgresql://postgres:postgres@localhost:5432/followup_agent';
+const openAiApiKey = 'test-api-key';
 
 describe('validateEnvironment', () => {
   it('기본 환경변수 값을 적용한다', () => {
     expect(
       validateEnvironment({
         DATABASE_URL: databaseUrl,
+        OPENAI_API_KEY: openAiApiKey,
       }),
     ).toEqual({
       NODE_ENV: 'development',
       PORT: 3000,
       DATABASE_URL: databaseUrl,
+      OPENAI_API_KEY: openAiApiKey,
+      OPENAI_MODEL: 'gpt-5.6',
     });
   });
 
@@ -24,17 +28,21 @@ describe('validateEnvironment', () => {
         PORT: '3100',
         DATABASE_URL: databaseUrl,
         CORS_ORIGIN: 'http://localhost:5173',
+        OPENAI_API_KEY: openAiApiKey,
+        OPENAI_MODEL: 'gpt-test',
       }),
     ).toEqual({
       NODE_ENV: 'test',
       PORT: 3100,
       DATABASE_URL: databaseUrl,
       CORS_ORIGIN: 'http://localhost:5173',
+      OPENAI_API_KEY: openAiApiKey,
+      OPENAI_MODEL: 'gpt-test',
     });
   });
 
   it('DATABASE_URL이 없으면 실패한다', () => {
-    expect(() => validateEnvironment({})).toThrow(
+    expect(() => validateEnvironment({ OPENAI_API_KEY: openAiApiKey })).toThrow(
       'DATABASE_URL: 필수 환경변수입니다.',
     );
   });
@@ -44,6 +52,7 @@ describe('validateEnvironment', () => {
       validateEnvironment({
         PORT: '70000',
         DATABASE_URL: databaseUrl,
+        OPENAI_API_KEY: openAiApiKey,
       }),
     ).toThrow('PORT: 1 이상 65535 이하의 정수여야 합니다.');
   });
@@ -52,6 +61,7 @@ describe('validateEnvironment', () => {
     expect(() =>
       validateEnvironment({
         DATABASE_URL: 'mysql://user:password@localhost:3306/followup_agent',
+        OPENAI_API_KEY: openAiApiKey,
       }),
     ).toThrow('postgresql:// 형식의 데이터베이스 URL이어야 합니다.');
   });
@@ -61,6 +71,7 @@ describe('validateEnvironment', () => {
       validateEnvironment({
         DATABASE_URL: databaseUrl,
         CORS_ORIGIN: 'ftp://localhost:5173',
+        OPENAI_API_KEY: openAiApiKey,
       }),
     ).toThrow('http:// 또는 https:// 형식의 URL이어야 합니다.');
   });
@@ -71,16 +82,26 @@ describe('validateEnvironment', () => {
     expect(() =>
       validateEnvironment({
         DATABASE_URL: `mysql://user:${password}@localhost:3306/followup_agent`,
+        OPENAI_API_KEY: openAiApiKey,
       }),
     ).toThrow('postgresql:// 형식의 데이터베이스 URL이어야 합니다.');
 
     try {
       validateEnvironment({
         DATABASE_URL: `mysql://user:${password}@localhost:3306/followup_agent`,
+        OPENAI_API_KEY: openAiApiKey,
       });
     } catch (error) {
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).not.toContain(password);
     }
+  });
+
+  it('OPENAI_API_KEY가 없으면 실패한다', () => {
+    expect(() =>
+      validateEnvironment({
+        DATABASE_URL: databaseUrl,
+      }),
+    ).toThrow('OPENAI_API_KEY: 필수 환경변수입니다.');
   });
 });

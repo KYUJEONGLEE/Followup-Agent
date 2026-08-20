@@ -41,6 +41,8 @@ const environmentSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: postgresqlUrl,
   CORS_ORIGIN: httpUrl.optional(),
+  OPENAI_API_KEY: z.string().min(1),
+  OPENAI_MODEL: z.string().min(1).default('gpt-5.6'),
 });
 
 export type EnvironmentVariables = z.infer<typeof environmentSchema>;
@@ -62,6 +64,11 @@ export function validateEnvironment(
               ? '필수 환경변수입니다.'
               : issue.message,
           CORS_ORIGIN: issue.message,
+          OPENAI_API_KEY:
+            config.OPENAI_API_KEY === undefined
+              ? '필수 환경변수입니다.'
+              : '빈 문자열일 수 없습니다.',
+          OPENAI_MODEL: '빈 문자열일 수 없습니다.',
         };
 
         return `- ${path}: ${messages[path] ?? issue.message}`;
