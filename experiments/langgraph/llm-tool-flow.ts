@@ -32,6 +32,23 @@ const tools: OpenAI.Responses.Tool[] = [
         },
         strict: true,
     },
+    {
+        type: "function",
+        name: "get_consultations",
+        description: "고객 ID로 최근 상담 이력을 조회합니다.",
+        parameters: {
+            type: "object",
+            properties: {
+                customer_id: {
+                    type: "string",
+                    description: "조회할 고객 ID",
+                },
+            },
+            required: ["customer_id"],
+            additionalProperties: false,
+        },
+        strict: true,
+    },
 ];
 
 function getCustomer(name: string) {
@@ -45,6 +62,25 @@ function getCustomer(name: string) {
     ];
 
     return customers.find((customer) => customer.name === name) ?? null;
+}
+
+function getConsultations(customerId: string) {
+    const consultations = {
+        C001: [
+            {
+                id: "CONS001",
+                date: "2026-08-01",
+                summary: "다음 상담 전 생활 습관 확인 필요",
+            },
+            {
+                id: "CONS002",
+                date: "2026-07-15",
+                summary: "최근 상태 변화 확인",
+            },
+        ],
+    };
+
+    return consultations[customerId as keyof typeof consultations] ?? [];
 }
 
 const PendingToolCall = z.object({
@@ -114,21 +150,35 @@ const callLlm: GraphNode<typeof AgentState> = async (state) => {
 const executeTool: GraphNode<typeof AgentState> = (state) => {
     const toolCall = state.pendingToolCall;
 
-    if (!toolCall || toolCall.name !== "get_customer") {
-        throw new Error("실행할 get_customer Tool 호출이 없습니다.");
+    if (!toolCall) {
+        throw new Error("실행할 Tool 호출이 없습니다.");
     }
 
-    const args = JSON.parse(toolCall.arguments) as { name: string };
-    const customer = getCustomer(args.name);
+    const args = JSON.parse(toolCall.arguments) as Record<string, string>;
+    let data: unknown;
+
+    switch (toolCall.name) {
+        case "get_customer":
+            data = getCustomer(args.name);
+            break;
+        case "get_consultations":
+            data = getConsultations(args.customer_id);
+            break;
+        default:
+            throw new Error(`지원하지 않는 Tool: ${toolCall.name}`);
+    }
 
     return {
         pendingToolCall: null,
         toolCallId: toolCall.callId,
         toolOutput: JSON.stringify({
             success: true,
-            data: customer,
+            data,
         }),
-        trace: [...state.trace, `execute_tool:get_customer(${args.name})`],
+        trace: [
+            ...state.trace,
+            `execute_tool:${toolCall.name}(${JSON.stringify(args)})`,
+        ],
     };
 };
 
@@ -151,8 +201,10 @@ async function runCase(title: string, userMessage: string) {
 }
 
 async function main() {
-    await runCase("고객 조회", "김민수 고객 정보를 알려줘.");
-    await runCase("Tool 미사용", "안녕하세요.");
+    await runCase(
+        "고객 정보와 상담 이력 조회",
+        "김민수 고객의 기본 정보와 최근 상담 내용을 같이 알려줘."
+    );
 }
 
 main().catch(console.error);
