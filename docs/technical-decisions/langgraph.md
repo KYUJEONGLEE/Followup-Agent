@@ -29,7 +29,7 @@ Tool Execution Loop를 직접 구현했다.
 
 | 항목 | 직접 구현 Loop | LangGraph |
 |---|---|---|
-| 다단계 Tool 실행 | 검증 완료 | 검증 예정 |
+| 다단계 Tool 실행 | 검증 완료 | 검증 완료 |
 | 단일 Tool 실행 | 검증 완료 | 검증 완료 |
 | 상태 관리 | 응답 객체와 지역 변수로 관리 | 공통 State로 검증 완료 |
 | 조건 분기 | `while` 내부 조건문 | Conditional Edge로 검증 완료 |
@@ -89,9 +89,41 @@ START
 
 직접 구현 Loop에서도 동일한 API 호출과 Tool 실행을 수행한다. 차이는 반복문의 조건문이 다음 단계를 결정하는 대신, LangGraph에서는 `pendingToolCall`을 보고 Conditional Edge가 Tool Node 또는 종료를 선택한다는 점이다.
 
+### 의존 관계가 있는 다단계 Tool Calling
+
+고객 정보와 최근 상담 이력을 함께 요청하는 시나리오를 실행했다.
+`get_consultations`는 고객 이름이 아닌 `customer_id`를 입력으로 받으므로,
+첫 번째 Tool 결과가 두 번째 Tool 호출에 필요하다.
+
+```text
+START
+→ call_llm:function_call:get_customer
+→ execute_tool:get_customer({"name":"김민수"})
+→ call_llm:function_call:get_consultations
+→ execute_tool:get_consultations({"customer_id":"C001"})
+→ call_llm:final_answer
+→ END
+```
+
+- 첫 번째 LLM Node가 `get_customer(name="김민수")`를 선택했다.
+- 고객 조회 결과의 `C001`을 받은 뒤, LLM이 `get_consultations(customer_id="C001")`를 선택했다.
+- Backend와 Graph에는 `get_customer → get_consultations`의 개별 호출 순서를 정의하지 않았다.
+- Graph는 `LLM → Tool → LLM`이라는 일반적인 반복 구조만 관리한다.
+- `trace`에 Tool 이름과 실제 arguments를 남겨, 다단계 호출 순서와 데이터 의존성을 확인했다.
+
+### MVP Workflow Diagram
+
+```mermaid
+flowchart TD
+    START([START]) --> LLM[LLM Node]
+    LLM -->|function_call 있음| TOOL[Tool Node]
+    TOOL -->|function_call_output| LLM
+    LLM -->|function_call 없음| END([END])
+```
+
 ## 5. 검증 범위와 남은 확인 사항
 
-- 이번 Spike는 단일 Tool `get_customer`만 다룬다. 다단계 Tool Calling은 아직 LangGraph 방식으로 검증하지 않았다.
+- 단일 Tool `get_customer`와, 결과 의존성이 있는 `get_customer → get_consultations` 순차 호출을 검증했다.
 - 고객 정보는 테스트 데이터이며 DB, 외부 API, 사용자 승인, 재시도, checkpoint는 연결하지 않았다.
 - 단일 Tool 흐름에서는 직접 구현 Loop보다 LangGraph 코드와 State 항목이 더 늘어난다.
 - 따라서 이번 결과만으로 복잡한 업무 Workflow에서의 유지보수성 우위를 결론낼 수는 없다.
@@ -99,17 +131,32 @@ START
 
 ## 6. 기술적 결정
 
-### 현재 결정: 단순 Tool Calling의 기본 도입은 보류
+### 결정: MVP Agent Workflow에 LangGraph를 채택
 
 단일 Tool Calling은 기존의 직접 구현 Loop로도 충분히 처리할 수 있다.
 LangGraph는 실행 경로를 Node와 Edge로 명시하고 State 변화를 추적하기 쉽게 만들지만,
-현재 검증 범위에서는 추가되는 State 설계와 라이브러리 의존성에 비해 얻는 이점이 결정적이지 않았다.
+단순한 흐름만 다루면 추가되는 State 설계와 라이브러리 의존성이 더 클 수 있다.
 
-따라서 단순한 `LLM → Tool → LLM → 종료` 흐름은 직접 구현 Loop를 기본으로 유지한다.
-이는 LangGraph를 사용하지 않겠다는 결론이 아니라, 아래 조건이 확인될 때 다시 채택을 검토한다는 뜻이다.
+그러나 이 프로젝트의 MVP는 여러 Tool을 LLM 판단으로 순차 실행하고,
+이전 Tool 결과를 다음 Tool 입력으로 전달하는 Agent Workflow를 다룬다.
+따라서 실행 경로, 중간 State, Tool 호출 trace를 명시적으로 관리하기 위해
+LangGraph를 MVP의 Agent Workflow Orchestration Layer로 채택한다.
 
-- 여러 Tool을 순서대로 호출해야 하는 경우
+이는 LangGraph가 직접 구현 Loop보다 항상 우수하다는 결론이 아니다.
+직접 Loop는 단순 Tool Calling의 기준 구현으로 유지하며,
+MVP에서는 Workflow를 확장하고 설명하기 위한 구조적 선택으로 LangGraph를 사용한다.
+
+MVP 이후 아래 요구가 추가될 때 State와 Edge를 확장한다.
+
 - 사용자 승인 또는 중단 후 재개가 필요한 경우
 - Tool 실패에 따라 재시도, 대체 경로, 종료를 명시적으로 분기해야 하는 경우
 - 실행 경로와 중간 State를 운영 환경에서 추적해야 하는 경우
 
+### MVP 구현에서의 적용 시점
+
+이 문서의 Spike는 LangGraph 채택 여부를 판단하기 위한 기술 검증이다.
+실제 NestJS Agent Backend와 PostgreSQL 기반 Read Tool에 LangGraph를 연결하는 작업은
+MVP 구현 순서의 7단계에서 수행한다.
+
+그 전 단계에서는 NestJS 환경, 도메인·스키마, Migration·Seed, API 계약,
+Tool 인터페이스와 Read Tool을 먼저 준비한다.
