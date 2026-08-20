@@ -4,6 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "api:build": "pnpm --filter @followup-agent/api build",
+    "api:start": "pnpm --filter @followup-agent/api start",
+    "api:start:dev": "pnpm --filter @followup-agent/api start:dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
