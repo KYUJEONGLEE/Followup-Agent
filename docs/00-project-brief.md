@@ -65,6 +65,15 @@
 - LLM, Tool, 검색 과정에서 실패가 발생했을 때 어떤 범위까지 재시도하거나 사용자에게 반환할 것인가?
 
 
+### 기술 검증 결과
+
+- OpenAI Responses API 기반의 직접 Tool Execution Loop에서 단일·다단계 Tool Calling을 검증했다.
+- LangGraph StateGraph에서도 실제 LLM의 Function Calling 결과에 따라 Tool 실행과 종료를 분기하는 흐름을 검증했다.
+- `get_customer` 결과의 `customer_id`를 다음 `get_consultations` Tool 입력으로 사용하는 의존 관계가 있는 순차 실행을 검증했다.
+- MVP의 Agent Workflow Orchestration Layer로 LangGraph를 채택한다. LLM 호출과 실제 Tool 실행은 기존 OpenAI JavaScript SDK 및 Backend 함수가 담당한다.
+- 상세 비교 근거와 실행 trace는 `docs/technical-decisions/langgraph.md`에 기록한다.
+
+
 ## 3. 범위
 
 ### In-Scope
@@ -73,7 +82,7 @@
 - 자연어 업무 요청을 처리하는 Backend API
 - LLM을 이용한 업무 요청 해석 및 Tool 선택
 - 여러 Tool을 순차적으로 실행할 수 있는 Agent 실행 흐름
-- Agent 실행 중 필요한 상태 관리
+- LangGraph의 State, Node, Conditional Edge를 이용한 Agent 실행 흐름 및 상태 관리
 
 #### 업무 데이터
 - 고객 정보 관리
@@ -113,6 +122,45 @@
 #### 기존 프로젝트 연동
 - Agent의 LLM 요청을 GateLM을 통해 처리할 수 있도록 연동
 - Agent → GateLM → LLM Provider 전체 흐름 검증
+
+
+### MVP 구현 순서
+
+LangGraph 기술 검증은 MVP 구현 전에 완료했다. 실제 MVP 구현은 아래 순서로 진행하며,
+LangGraph를 NestJS Agent Backend에 연결하는 작업은 7단계에서 수행한다.
+
+| 순서 | Task |
+|---:|---|
+| 1 | NestJS Agent Backend 프로젝트 및 개발 환경 구성 |
+| 2 | 도메인 모델 및 PostgreSQL 스키마 설계 |
+| 3 | Migration / Seed 데이터 구성 |
+| 4 | Agent API 요청·응답 계약 정의 |
+| 5 | Tool 인터페이스 및 실행 구조 설계 |
+| 6 | 고객 정보 / 상담 이력 Read Tool 구현 |
+| 7 | LangGraph 기반 Agent Workflow 구현 |
+| 8 | 후속 업무 생성 Write Tool 구현 |
+| 9 | 사용자 승인 흐름 구현 |
+| 10 | 핵심 시나리오 E2E 검증 |
+
+### 7단계 Agent Workflow 구현 범위
+
+1~6단계에서 Backend, 데이터, API 계약, Read Tool을 준비한 뒤,
+Agent의 핵심 실행 흐름을 LangGraph로 연결한다.
+
+```text
+사용자 요청
+→ LangGraph LLM Node
+→ Function Call 유무 판단
+→ Tool Node
+→ LLM Node
+→ 최종 응답
+```
+
+- `get_customer(name)`와 `get_consultations(customer_id)`를 실제 Agent Tool로 구현한다.
+- LLM이 Tool 호출 순서를 결정하고, Tool 결과를 다음 LLM 호출에 전달한다.
+- Agent 실행 ID와 Node·Tool trace를 기록해 요청 단위 흐름을 확인한다.
+- 테스트 데이터로 고객 및 상담 이력을 제공한다.
+- RAG, Write Tool, 사용자 승인, 재시도, 외부 시스템 연동은 이후 단계로 미룬다.
 
 
 ### Out-of-Scope
@@ -208,7 +256,7 @@ Agent는 다음 과정을 수행한다.
 - Backend 중심으로 구현하며 복잡한 Web UI는 개발하지 않는다.
 - 실제 고객 및 의료 데이터를 사용하지 않고 가상의 테스트 데이터를 사용한다.
 - 외부 LLM API를 활용하며 자체 모델 학습은 진행하지 않는다.
-- 특정 Framework나 Library를 미리 사용하기로 결정하지 않고 기술 검증 결과를 바탕으로 선택한다.
+- LangGraph는 기술 검증 결과를 바탕으로 MVP의 Agent Workflow Orchestration Layer로 채택한다.
 - 추가 기능보다 핵심 업무 흐름과 정상/실패 상황 검증을 우선한다.
 
 
