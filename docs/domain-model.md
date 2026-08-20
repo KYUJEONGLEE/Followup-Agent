@@ -110,7 +110,162 @@ MVP에서는 종료된 업무를 다시 여는 전이를 지원하지 않는다.
 - `completed` 상태인 후속 업무만 완료 시각을 가진다.
 - 제목, 이름, 상담 요약에는 공백만 저장할 수 없다.
 
-## 7. 설계 근거와 후속 작업 경계
+## 7. PostgreSQL 테이블 설계
+
+### `customers`
+
+| 컬럼 | PostgreSQL 타입 | NULL | 기본값 | 제약조건과 의미 |
+|---|---|---:|---|---|
+| `id` | `uuid` | 불가 | `gen_random_uuid()` | PK, 변경되지 않는 내부 식별자 |
+| `customer_code` | `varchar(20)` | 불가 | 없음 | 업무 식별자, UNIQUE, 공백 불가 |
+| `name` | `varchar(100)` | 불가 | 없음 | 고객 표시 이름, 공백 불가, 중복 허용 |
+| `status` | `varchar(20)` | 불가 | `'active'` | `active`, `inactive`만 허용 |
+| `created_at` | `timestamptz` | 불가 | `now()` | 생성 시각 |
+| `updated_at` | `timestamptz` | 불가 | `now()` | 마지막 변경 시각 |
+
+### `consultations`
+
+| 컬럼 | PostgreSQL 타입 | NULL | 기본값 | 제약조건과 의미 |
+|---|---|---:|---|---|
+| `id` | `uuid` | 불가 | `gen_random_uuid()` | PK, 변경되지 않는 내부 식별자 |
+| `consultation_code` | `varchar(20)` | 불가 | 없음 | 업무 식별자, UNIQUE, 공백 불가 |
+| `customer_id` | `uuid` | 불가 | 없음 | `customers.id` FK |
+| `consulted_at` | `timestamptz` | 불가 | 없음 | 실제 상담 시각 |
+| `summary` | `text` | 불가 | 없음 | 상담 내용 요약, 공백 불가 |
+| `created_at` | `timestamptz` | 불가 | `now()` | 레코드 생성 시각 |
+| `updated_at` | `timestamptz` | 불가 | `now()` | 마지막 변경 시각 |
+
+`(id, customer_id)` 조합에는 UNIQUE 제약조건을 추가한다.
+이는 후속 업무가 근거 상담을 연결할 때 상담과 업무의 고객이 같은지
+복합 Foreign Key로 검증하기 위한 참조 키다.
+
+### `follow_up_tasks`
+
+| 컬럼 | PostgreSQL 타입 | NULL | 기본값 | 제약조건과 의미 |
+|---|---|---:|---|---|
+| `id` | `uuid` | 불가 | `gen_random_uuid()` | PK, 변경되지 않는 업무 식별자 |
+| `customer_id` | `uuid` | 불가 | 없음 | 업무 대상인 `customers.id` FK |
+| `source_consultation_id` | `uuid` | 허용 | `NULL` | 근거 상담이 있을 때 `consultations.id` 참조 |
+| `title` | `varchar(200)` | 불가 | 없음 | 후속 업무 제목, 공백 불가 |
+| `description` | `text` | 허용 | `NULL` | 수행할 조치와 생성 근거 |
+| `status` | `varchar(20)` | 불가 | `'pending'` | `pending`, `in_progress`, `completed`, `cancelled`만 허용 |
+| `due_at` | `timestamptz` | 허용 | `NULL` | 업무 기한이 있을 때의 절대 시각 |
+| `completed_at` | `timestamptz` | 허용 | `NULL` | `completed` 상태일 때만 필수 |
+| `idempotency_key` | `varchar(100)` | 허용 | `NULL` | Write Tool 재시도 중복 방지용 키 |
+| `created_at` | `timestamptz` | 불가 | `now()` | 생성 시각 |
+| `updated_at` | `timestamptz` | 불가 | `now()` | 마지막 변경 시각 |
+
+`idempotency_key`는 Agent가 생성한 업무에만 사용한다.
+수동 또는 Seed 업무는 `NULL`을 허용하며, 값이 있으면 전체 테이블에서 고유해야 한다.
+
+## 8. 참조 DDL
+
+다음 SQL은 AGENT-13 Migration 구현의 기준이 되는 설계 표현이다.
+아직 실행 가능한 Migration 파일은 아니며, 실제 도구를 선택한 뒤 동일한 제약조건으로 변환한다.
+
+```sql
+CREATE TABLE customers (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_code varchar(20) NOT NULL,
+    name varchar(100) NOT NULL,
+    status varchar(20) NOT NULL DEFAULT 'active',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uq_customers_customer_code UNIQUE (customer_code),
+    CONSTRAINT ck_customers_customer_code_not_blank
+        CHECK (btrim(customer_code) <> ''),
+    CONSTRAINT ck_customers_name_not_blank
+        CHECK (btrim(name) <> ''),
+    CONSTRAINT ck_customers_status
+        CHECK (status IN ('active', 'inactive'))
+);
+
+CREATE TABLE consultations (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    consultation_code varchar(20) NOT NULL,
+    customer_id uuid NOT NULL,
+    consulted_at timestamptz NOT NULL,
+    summary text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uq_consultations_consultation_code
+        UNIQUE (consultation_code),
+    CONSTRAINT uq_consultations_id_customer
+        UNIQUE (id, customer_id),
+    CONSTRAINT fk_consultations_customer
+        FOREIGN KEY (customer_id)
+        REFERENCES customers (id)
+        ON DELETE RESTRICT,
+    CONSTRAINT ck_consultations_code_not_blank
+        CHECK (btrim(consultation_code) <> ''),
+    CONSTRAINT ck_consultations_summary_not_blank
+        CHECK (btrim(summary) <> '')
+);
+
+CREATE TABLE follow_up_tasks (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id uuid NOT NULL,
+    source_consultation_id uuid,
+    title varchar(200) NOT NULL,
+    description text,
+    status varchar(20) NOT NULL DEFAULT 'pending',
+    due_at timestamptz,
+    completed_at timestamptz,
+    idempotency_key varchar(100),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT fk_follow_up_tasks_customer
+        FOREIGN KEY (customer_id)
+        REFERENCES customers (id)
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_follow_up_tasks_source_consultation
+        FOREIGN KEY (source_consultation_id, customer_id)
+        REFERENCES consultations (id, customer_id)
+        ON DELETE RESTRICT,
+    CONSTRAINT ck_follow_up_tasks_title_not_blank
+        CHECK (btrim(title) <> ''),
+    CONSTRAINT ck_follow_up_tasks_status
+        CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+    CONSTRAINT ck_follow_up_tasks_completion
+        CHECK (
+            (status = 'completed' AND completed_at IS NOT NULL)
+            OR (status <> 'completed' AND completed_at IS NULL)
+        ),
+    CONSTRAINT ck_follow_up_tasks_idempotency_key_not_blank
+        CHECK (idempotency_key IS NULL OR btrim(idempotency_key) <> '')
+);
+```
+
+## 9. 참조 및 삭제 정책
+
+| 관계 | Foreign Key | 삭제 정책 | 이유 |
+|---|---|---|---|
+| 상담 → 고객 | `consultations.customer_id` | `RESTRICT` | 상담 이력이 남아 있으면 고객 기록 삭제 금지 |
+| 후속 업무 → 고객 | `follow_up_tasks.customer_id` | `RESTRICT` | 업무 이력이 남아 있으면 고객 기록 삭제 금지 |
+| 후속 업무 → 근거 상담 | `(source_consultation_id, customer_id)` | `RESTRICT` | 업무의 생성 근거가 된 상담 삭제 금지 |
+
+MVP에서는 물리 삭제 API를 제공하지 않는다.
+고객은 `inactive`, 후속 업무는 `cancelled` 상태를 사용해 운영 대상에서 제외한다.
+
+`updated_at DEFAULT now()`는 생성 시각만 자동으로 채운다.
+레코드 변경 시각은 이후 Repository 또는 ORM 계층에서 명시적으로 갱신해야 한다.
+
+## 10. PostgreSQL 설계 근거
+
+- PostgreSQL의 `uuid` 타입과 `gen_random_uuid()`를 내부 PK에 사용한다.
+- 업무 발생 시각은 시간대가 다른 환경에서도 같은 절대 시점을 나타내도록 `timestamptz`로 저장한다.
+- 필수값은 `NOT NULL`, 허용값은 `CHECK`, 고유 업무 식별자는 `UNIQUE`로 데이터베이스에서도 검증한다.
+- 고객과 상담의 관계 및 같은 고객의 근거 상담 조건은 단일·복합 `FOREIGN KEY`로 검증한다.
+- Foreign Key 선언만으로 참조하는 쪽 컬럼의 인덱스가 자동 생성되지는 않으므로 조회 인덱스는 별도로 정의한다.
+
+참고한 PostgreSQL 공식 문서:
+
+- [UUID Type](https://www.postgresql.org/docs/current/datatype-uuid.html)
+- [UUID Functions](https://www.postgresql.org/docs/current/functions-uuid.html)
+- [Date/Time Types](https://www.postgresql.org/docs/current/datatype-datetime.html)
+- [Constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
+
+## 11. 설계 근거와 후속 작업 경계
 
 - 프로젝트 시나리오와 MVP 범위: [`00-project-brief.md`](./00-project-brief.md)
 - Agent Workflow 결정: [`technical-decisions/langgraph.md`](./technical-decisions/langgraph.md)
