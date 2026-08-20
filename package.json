@@ -10,6 +10,7 @@
     "api:start:dev": "pnpm --filter @followup-agent/api start:dev",
     "api:test": "pnpm --filter @followup-agent/api test",
     "api:test:e2e": "pnpm --filter @followup-agent/api test:e2e",
+    "api:test:integration": "pnpm --filter @followup-agent/api test:integration",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs postgres",
     "db:migrate": "pnpm --filter @followup-agent/api database:migrate",
@@ -19,7 +20,8 @@
     "db:up": "docker compose up -d --wait postgres",
     "db:verify": "pnpm --filter @followup-agent/api database:verify",
     "test": "pnpm api:test",
-    "test:e2e": "pnpm api:test:e2e"
+    "test:e2e": "pnpm api:test:e2e",
+    "test:integration": "pnpm api:test:integration"
   },
   "keywords": [],
   "author": "",
