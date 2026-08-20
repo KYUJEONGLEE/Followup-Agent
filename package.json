@@ -8,7 +8,10 @@
     "api:lint": "pnpm --filter @followup-agent/api lint",
     "api:start": "pnpm --filter @followup-agent/api start",
     "api:start:dev": "pnpm --filter @followup-agent/api start:dev",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "api:test": "pnpm --filter @followup-agent/api test",
+    "api:test:e2e": "pnpm --filter @followup-agent/api test:e2e",
+    "test": "pnpm api:test",
+    "test:e2e": "pnpm api:test:e2e"
   },
   "keywords": [],
   "author": "",
