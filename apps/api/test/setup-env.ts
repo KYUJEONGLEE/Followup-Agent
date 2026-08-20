@@ -1,0 +1,6 @@
+process.env.NODE_ENV = 'test';
+process.env.PORT = '3000';
+process.env.DATABASE_URL =
+  'postgresql://test:test@localhost:5432/followup_agent_test';
+delete process.env.CORS_ORIGIN;
+
