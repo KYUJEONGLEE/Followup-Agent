@@ -12,6 +12,9 @@ LangGraph를 MVP의 Agent Workflow Orchestration Layer로 채택했습니다.
 현재는 NestJS 기반 Agent Backend MVP를 단계별로 구현하고 있습니다.
 `experiments`는 기술 검증 코드이며, 실제 MVP Backend는 `apps/api`에 구성합니다.
 
+NestJS 개발 환경과 Backend 실행 기반을 구성했으며,
+Customer, Consultation, FollowUpTask 도메인과 PostgreSQL 스키마 설계를 완료했습니다.
+
 ## 프로젝트 목표
 
 - 자연어 요청에 따라 필요한 Tool을 선택하고 실행
@@ -43,6 +46,7 @@ FollowUp-Agent
 │  ├─ tool-calling/              # OpenAI Tool Calling 기술 검증
 │  └─ langgraph/                 # LangGraph Workflow 기술 검증
 ├─ docs/
+│  ├─ domain-model.md            # 도메인 관계와 PostgreSQL 스키마 설계
 │  └─ technical-decisions/       # 기술 검증 결과와 결정 기록
 ├─ package.json
 └─ pnpm-workspace.yaml
@@ -55,7 +59,7 @@ FollowUp-Agent
 - Node.js 22.23.1
 - pnpm 9.15.0
 
-AGENT-11 단계에서는 PostgreSQL에 실제로 연결하지 않으므로
+AGENT-12까지는 PostgreSQL에 실제로 연결하지 않으므로
 Docker와 PostgreSQL을 실행하지 않아도 Backend를 시작할 수 있습니다.
 
 ## 설치
@@ -183,18 +187,19 @@ pnpm tsx experiments/tool-calling/index.ts
 ## 현재 제한 사항
 
 - PostgreSQL 실제 연결 및 Docker 구성 없음
-- 도메인 모델, DB 스키마, Migration, Seed 데이터 없음
+- 설계한 도메인 모델과 DB 스키마를 실제 Migration으로 적용하지 않음
+- Migration 및 Seed 데이터 없음
 - Agent API 요청·응답 계약 미정의
 - 고객 정보 및 상담 이력 Tool 미구현
 - LangGraph는 아직 `apps/api`에 연결하지 않음
 - 인증·인가 및 Rate Limit 미구현
 - Health API는 DB readiness를 확인하지 않음
 
-다음 구현 단계는 도메인 모델과 PostgreSQL 스키마를 설계하는 AGENT-12입니다.
-Docker 기반 PostgreSQL, Migration, Seed 데이터는 AGENT-13에서 구성합니다.
+다음 구현 단계는 Docker 기반 PostgreSQL, Migration, Seed 데이터를 구성하는 AGENT-13입니다.
 
 ## 문서
 
 - [Project Brief](./docs/00-project-brief.md)
+- [도메인 모델 및 PostgreSQL 스키마 설계](./docs/domain-model.md)
 - [Tool Calling 기술 결정](./docs/technical-decisions/tool-calling.md)
 - [LangGraph 기술 결정](./docs/technical-decisions/langgraph.md)
