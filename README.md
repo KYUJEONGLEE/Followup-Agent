@@ -4,6 +4,14 @@
 내부 정책을 참고해 판단을 보조하며,
 사용자의 요청에 따라 후속 업무까지 실행하는 AI Agent 프로젝트입니다.
 
+## 개발 상태
+
+OpenAI Tool Calling과 LangGraph Workflow 기술 검증을 완료하고,
+LangGraph를 MVP의 Agent Workflow Orchestration Layer로 채택했습니다.
+
+현재는 NestJS 기반 Agent Backend MVP를 단계별로 구현하고 있습니다.
+`experiments`는 기술 검증 코드이며, 실제 MVP Backend는 `apps/api`에 구성합니다.
+
 ## 프로젝트 목표
 
 - 자연어 요청에 따라 필요한 Tool을 선택하고 실행
@@ -25,27 +33,168 @@ Agent는 고객 정보와 상담 이력을 조회하고,
 
 사용자가 후속 업무 생성을 요청하면 실제 업무를 생성하고 결과를 반환합니다.
 
+## 저장소 구조
+
+```text
+FollowUp-Agent
+├─ apps/
+│  └─ api/                       # 실제 NestJS Agent Backend
+├─ experiments/
+│  ├─ tool-calling/              # OpenAI Tool Calling 기술 검증
+│  └─ langgraph/                 # LangGraph Workflow 기술 검증
+├─ docs/
+│  └─ technical-decisions/       # 기술 검증 결과와 결정 기록
+├─ package.json
+└─ pnpm-workspace.yaml
+```
+
+## 개발 환경
+
+현재 검증한 환경은 다음과 같습니다.
+
+- Node.js 22.23.1
+- pnpm 9.15.0
+
+AGENT-11 단계에서는 PostgreSQL에 실제로 연결하지 않으므로
+Docker와 PostgreSQL을 실행하지 않아도 Backend를 시작할 수 있습니다.
+
+## 설치
+
+저장소 루트에서 의존성을 설치합니다.
+
+```powershell
+pnpm install
+```
+
+pnpm Workspace가 루트의 기술 검증 패키지와 `apps/api` 패키지의 의존성을 함께 설치합니다.
+
+## 환경변수
+
+예제 파일을 복사하여 API 전용 `.env`를 준비합니다.
+
+```powershell
+Copy-Item apps/api/.env.example apps/api/.env
+```
+
+| 이름 | 필수 | 기본값 | 역할 |
+|---|---|---|---|
+| `NODE_ENV` | 아니요 | `development` | 실행 환경 (`development`, `test`, `production`) |
+| `PORT` | 아니요 | `3000` | API가 사용할 포트 |
+| `DATABASE_URL` | 예 | 없음 | PostgreSQL 연결에 사용할 URL |
+| `CORS_ORIGIN` | 아니요 | 없음 | 브라우저 접근을 허용할 Web Origin |
+
+현재 `DATABASE_URL`은 PostgreSQL URL 형식만 검증합니다.
+실제 DB 연결, Migration, Seed 데이터는 이후 작업에서 구성합니다.
+
+`.env`에는 비밀번호나 API Key가 포함될 수 있으므로 Git에 커밋하지 않습니다.
+`.env.example`에는 로컬 개발용 예시값만 기록합니다.
+
+## Backend 실행
+
+개발 모드로 실행합니다.
+
+```powershell
+pnpm api:start:dev
+```
+
+일반 실행은 다음 명령을 사용합니다.
+
+```powershell
+pnpm api:start
+```
+
+빌드된 JavaScript를 실행하려면 다음 명령을 사용합니다.
+
+```powershell
+pnpm api:build
+pnpm --filter @followup-agent/api start:prod
+```
+
+`start:prod`는 빌드 결과를 실행하는 명령이며,
+프로덕션 배포나 운영 인프라 구성이 완료됐다는 의미는 아닙니다.
+
+## Health API
+
+Backend 실행 후 다음 요청으로 프로세스 상태를 확인합니다.
+
+```powershell
+Invoke-RestMethod http://localhost:3000/health
+```
+
+예상 응답은 다음과 같습니다.
+
+```json
+{
+  "status": "ok"
+}
+```
+
+현재 Health API는 NestJS 프로세스가 HTTP 요청을 처리할 수 있는지만 확인합니다.
+PostgreSQL, OpenAI, LangGraph와 같은 외부 의존성의 준비 상태는 확인하지 않습니다.
+
+## 품질 검증
+
+| 명령 | 역할 |
+|---|---|
+| `pnpm api:lint` | API와 테스트 코드의 ESLint 검사 |
+| `pnpm api:build` | TypeScript strict 검사 및 NestJS build |
+| `pnpm test` | 환경변수와 Health Controller 단위 테스트 |
+| `pnpm test:e2e` | Health API HTTP E2E 테스트 |
+
+전체 검증은 다음 순서로 실행합니다.
+
+```powershell
+pnpm api:lint
+pnpm api:build
+pnpm test
+pnpm test:e2e
+```
+
+## 현재 적용된 Backend 기본 설정
+
+- TypeScript strict
+- ESLint
+- 환경변수 Fail-fast 검증
+- Helmet 기반 보안 HTTP Header
+- 환경변수 기반 CORS 정책
+- 전역 ValidationPipe
+- Shutdown Hook
+- Health API
+- Jest 단위 테스트
+- Supertest E2E 테스트
+
+이는 향후 API 구현을 위한 최소 보안·운영 기반이며,
+인증·인가와 운영 보안 구성이 완료됐다는 의미는 아닙니다.
+
+## 기술 검증 실행
+
+LangGraph의 State 전달과 조건 분기 실험은 다음 명령으로 실행할 수 있습니다.
+
+```powershell
+pnpm tsx experiments/langgraph/basic-graph.ts
+```
+
+실제 OpenAI Tool Calling 실험은 루트 `.env`의 `OPENAI_API_KEY`가 필요합니다.
+
+```powershell
+pnpm tsx experiments/tool-calling/index.ts
+```
+
+## 현재 제한 사항
+
+- PostgreSQL 실제 연결 및 Docker 구성 없음
+- 도메인 모델, DB 스키마, Migration, Seed 데이터 없음
+- Agent API 요청·응답 계약 미정의
+- 고객 정보 및 상담 이력 Tool 미구현
+- LangGraph는 아직 `apps/api`에 연결하지 않음
+- 인증·인가 및 Rate Limit 미구현
+- Health API는 DB readiness를 확인하지 않음
+
+다음 구현 단계는 도메인 모델과 PostgreSQL 스키마를 설계하는 AGENT-12입니다.
+Docker 기반 PostgreSQL, Migration, Seed 데이터는 AGENT-13에서 구성합니다.
+
 ## 문서
 
 - [Project Brief](./docs/00-project-brief.md)
-
-## 개발 진행
-
-현재 프로젝트 요구사항 정의 및 기술 검증을 진행하고 있습니다.
-
-주요 검증 대상은 다음과 같습니다.
-
-- OpenAI Tool Calling
-- Agent Workflow
-- RAG
-- Tool 실행 및 상태 관리
-- Write 작업 중복 실행 방지
-
-## Tech Stack
-
-기술 검증 결과에 따라 세부 구현 기술을 확정할 예정입니다.
-
-- TypeScript
-- NestJS
-- PostgreSQL
-- OpenAI API
+- [Tool Calling 기술 결정](./docs/technical-decisions/tool-calling.md)
+- [LangGraph 기술 결정](./docs/technical-decisions/langgraph.md)
