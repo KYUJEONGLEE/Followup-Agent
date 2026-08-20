@@ -8,7 +8,7 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL 환경변수가 필요합니다.');
 }
 
-export const appDataSource = new DataSource({
+const appDataSource = new DataSource({
   type: 'postgres',
   url: databaseUrl,
   synchronize: false,
