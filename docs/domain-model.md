@@ -265,7 +265,180 @@ MVP에서는 물리 삭제 API를 제공하지 않는다.
 - [Date/Time Types](https://www.postgresql.org/docs/current/datatype-datetime.html)
 - [Constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
-## 11. 설계 근거와 후속 작업 경계
+## 11. 주요 조회 경로
+
+### 고객 업무 코드 조회
+
+`customer_code`는 사용자나 다른 Tool이 특정 고객을 확정한 뒤 사용하는 고유 업무 식별자다.
+
+```sql
+SELECT id, customer_code, name, status
+FROM customers
+WHERE customer_code = $1;
+```
+
+UNIQUE 제약조건이 만든 인덱스를 사용한다.
+
+### 고객 이름 조회
+
+`get_customer(name)`은 고객 이름을 검색하지만 이름 자체는 고유하지 않다.
+
+```sql
+SELECT id, customer_code, name, status
+FROM customers
+WHERE name = $1
+  AND status = 'active'
+ORDER BY customer_code;
+```
+
+조회 결과가 0건이면 미존재, 1건이면 고객 확정, 2건 이상이면 동명이인으로 처리한다.
+동명이인 중 첫 행을 임의로 선택하지 않고 `customer_code`와 같은 추가 식별 정보를 요청한다.
+
+### 고객별 최근 상담 이력 조회
+
+```sql
+SELECT id, consultation_code, customer_id, consulted_at, summary
+FROM consultations
+WHERE customer_id = $1
+ORDER BY consulted_at DESC, id DESC
+LIMIT $2;
+```
+
+동일한 상담 시각이 있더라도 `id`를 보조 정렬 키로 사용해 결과 순서를 안정적으로 유지한다.
+
+### 최근 상담 고객 후보 조회
+
+대표 시나리오에서 지정한 시점 이후의 상담과 활성 고객을 함께 조회한다.
+
+```sql
+SELECT
+    c.id AS customer_id,
+    c.customer_code,
+    c.name,
+    cs.id AS consultation_id,
+    cs.consulted_at,
+    cs.summary
+FROM consultations AS cs
+JOIN customers AS c ON c.id = cs.customer_id
+WHERE c.status = 'active'
+  AND cs.consulted_at >= $1
+ORDER BY cs.consulted_at DESC, cs.id DESC;
+```
+
+이 조회는 후보 데이터를 가져올 뿐, 후속 관리 필요 여부를 DB가 임의로 판단하지 않는다.
+Agent가 이후 정책 검색 결과와 함께 판단 근거를 구성한다.
+
+### 고객별 미완료 후속 업무 조회
+
+```sql
+SELECT id, customer_id, title, status, due_at, created_at
+FROM follow_up_tasks
+WHERE customer_id = $1
+  AND status IN ('pending', 'in_progress')
+ORDER BY due_at ASC NULLS LAST, created_at DESC;
+```
+
+완료되거나 취소된 업무는 기본 업무 목록에서 제외하지만 별도 이력 조회로 접근할 수 있다.
+
+### Write Tool 중복 실행 확인
+
+```sql
+SELECT id, customer_id, status
+FROM follow_up_tasks
+WHERE idempotency_key = $1;
+```
+
+Write Tool은 동일한 `idempotency_key`로 업무 생성을 재시도할 때
+새 행을 만들지 않고 기존 결과를 반환해야 한다.
+
+## 12. 인덱스 설계
+
+```sql
+CREATE INDEX idx_customers_name
+    ON customers (name);
+
+CREATE INDEX idx_consultations_customer_recent
+    ON consultations (customer_id, consulted_at DESC, id DESC);
+
+CREATE INDEX idx_consultations_recent
+    ON consultations (consulted_at DESC, id DESC, customer_id);
+
+CREATE INDEX idx_follow_up_tasks_customer_created
+    ON follow_up_tasks (customer_id, created_at DESC);
+
+CREATE INDEX idx_follow_up_tasks_open_by_customer
+    ON follow_up_tasks (
+        customer_id,
+        due_at ASC NULLS LAST,
+        created_at DESC
+    )
+    WHERE status IN ('pending', 'in_progress');
+
+CREATE INDEX idx_follow_up_tasks_source_consultation
+    ON follow_up_tasks (source_consultation_id, customer_id)
+    WHERE source_consultation_id IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_follow_up_tasks_idempotency_key
+    ON follow_up_tasks (idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+```
+
+| 인덱스 | 지원하는 경로 |
+|---|---|
+| `idx_customers_name` | 이름 기반 고객 조회, 동명이인 확인 |
+| `idx_consultations_customer_recent` | 고객별 최근 상담 이력 |
+| `idx_consultations_recent` | 기간 기준 최근 상담 고객 후보 |
+| `idx_follow_up_tasks_customer_created` | 고객별 전체 후속 업무 이력과 FK 참조 검사 |
+| `idx_follow_up_tasks_open_by_customer` | 고객별 미완료 업무와 기한 순 정렬 |
+| `idx_follow_up_tasks_source_consultation` | 근거 상담을 참조하는 업무 및 FK 참조 검사 |
+| `uq_follow_up_tasks_idempotency_key` | Write Tool 재시도 중복 생성 방지 |
+
+Primary Key와 UNIQUE 제약조건이 이미 생성하는 인덱스는 중복해서 정의하지 않는다.
+데이터가 없는 설계 단계이므로 성능 향상을 주장하지 않으며,
+AGENT-13에서 Seed 데이터를 구성한 뒤 `EXPLAIN (ANALYZE, BUFFERS)`로 실제 실행 계획을 확인한다.
+
+## 13. 주요 설계 선택과 트레이드오프
+
+### UUID PK와 업무 코드 분리
+
+UUID는 애플리케이션 내부 관계에 사용하고 `C001`, `CONS001` 같은 코드는
+테스트와 사용자 응답에서 식별하기 쉬운 업무 식별자로 사용한다.
+업무 코드 형식은 바뀔 수 있지만 내부 관계의 PK는 영향을 받지 않는다.
+
+### 고객 이름 중복 허용
+
+실제 업무에서는 동명이인이 존재하므로 `name`에 UNIQUE를 적용하지 않는다.
+이 때문에 이름 조회 Tool은 다건 결과를 명시적으로 처리해야 하지만,
+잘못된 고객을 임의로 선택하는 위험을 줄일 수 있다.
+
+### 상태를 `varchar`와 CHECK로 표현
+
+PostgreSQL 전용 ENUM 대신 문자열 컬럼과 이름이 있는 CHECK 제약조건을 사용한다.
+허용값은 DB에서 검증하면서도 이후 상태 추가 시 ENUM 타입 변경에 결합되지 않는다.
+애플리케이션에서는 같은 값을 TypeScript 타입으로 중복 없이 관리해야 한다.
+
+### `timestamptz` 사용
+
+상담, 기한, 완료와 감사 시각은 모두 절대 시점이므로 `timestamptz`를 사용한다.
+표시할 때 사용자 시간대로 변환하며 입력 시 사용한 원래 시간대 문자열은 별도로 보존하지 않는다.
+
+### 물리 삭제 제한
+
+상담과 후속 업무는 Agent 응답과 실행의 근거가 되는 업무 이력이다.
+따라서 Cascade 삭제를 사용하지 않고 FK `RESTRICT`와 상태 전이로 기록을 보존한다.
+
+### 선택적 멱등성 키
+
+Agent Write Tool이 생성하는 업무는 멱등성 키를 사용하지만 Seed나 수동 생성 데이터는
+키가 없을 수 있으므로 `NULL`을 허용한다. 값이 있는 행만 Partial UNIQUE Index에 포함한다.
+
+인덱스 선택 근거가 되는 PostgreSQL 공식 문서:
+
+- [Indexes and ORDER BY](https://www.postgresql.org/docs/current/indexes-ordering.html)
+- [Multicolumn Indexes](https://www.postgresql.org/docs/current/indexes-multicolumn.html)
+- [Partial Indexes](https://www.postgresql.org/docs/current/indexes-partial.html)
+
+## 14. 설계 근거와 후속 작업 경계
 
 - 프로젝트 시나리오와 MVP 범위: [`00-project-brief.md`](./00-project-brief.md)
 - Agent Workflow 결정: [`technical-decisions/langgraph.md`](./technical-decisions/langgraph.md)
