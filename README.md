@@ -18,6 +18,8 @@ Customer, Consultation, FollowUpTask 도메인과 PostgreSQL 스키마 설계를
 Agent 동기 API의 요청, 응답, 오류와 실행 Trace 계약을 정의했습니다.
 Tool 정의, 입력 검증, Handler 실행을 연결하는 공통 Registry를 구현했습니다.
 고객 정보와 상담 이력 Read Tool이 실제 PostgreSQL Seed 데이터를 조회합니다.
+LangGraph Workflow와 Agent HTTP API를 연결해 실제 LLM이 Read Tool을 선택하고
+그 결과를 다음 판단에 사용하는 반복 실행 흐름을 구현했습니다.
 
 ## 프로젝트 목표
 
@@ -63,8 +65,8 @@ FollowUp-Agent
 - Node.js 22.23.1
 - pnpm 9.15.0
 
-Backend 프로세스와 Health API만 확인할 때는 PostgreSQL이 필요하지 않습니다.
-Migration, Seed와 데이터 조회 검증에는 Docker 기반 PostgreSQL이 필요합니다.
+현재 Backend는 시작할 때 PostgreSQL 연결을 초기화하므로 API 실행에는 PostgreSQL이 필요합니다.
+단위 테스트와 외부 의존성을 대체한 E2E 테스트는 Docker 없이 실행할 수 있습니다.
 
 ## 설치
 
@@ -90,6 +92,8 @@ Copy-Item apps/api/.env.example apps/api/.env
 | `PORT` | 아니요 | `3000` | API가 사용할 포트 |
 | `DATABASE_URL` | 예 | 없음 | PostgreSQL 연결에 사용할 URL |
 | `CORS_ORIGIN` | 아니요 | 없음 | 브라우저 접근을 허용할 Web Origin |
+| `OPENAI_API_KEY` | 예 | 없음 | OpenAI Responses API 인증 키 |
+| `OPENAI_MODEL` | 아니요 | `gpt-5.6` | Agent가 사용할 OpenAI 모델 |
 
 현재 `DATABASE_URL`은 PostgreSQL URL 형식만 검증합니다.
 Migration과 Seed 스크립트가 이 URL을 사용해 PostgreSQL에 연결합니다.
@@ -180,6 +184,22 @@ Invoke-RestMethod http://localhost:3000/health
 현재 Health API는 NestJS 프로세스가 HTTP 요청을 처리할 수 있는지만 확인합니다.
 PostgreSQL, OpenAI, LangGraph와 같은 외부 의존성의 준비 상태는 확인하지 않습니다.
 
+## Agent API
+
+Agent 실행은 동기식 `POST /agent/runs` 요청으로 시작합니다.
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:3000/agent/runs `
+  -ContentType 'application/json' `
+  -Body '{"message":"김민수 고객의 기본 정보와 최근 상담 내용을 같이 알려줘."}'
+```
+
+응답에는 실행 식별자, 최종 답변과 실제 Node/Tool 실행 순서를 담은 `trace`가 포함됩니다.
+LLM이 Function Call을 반환하면 공통 Tool Registry가 해당 Tool을 실행하고,
+그 결과를 다시 LLM에 전달합니다. Function Call이 없을 때 Workflow가 종료됩니다.
+
 ## 품질 검증
 
 | 명령 | 역할 |
@@ -189,6 +209,7 @@ PostgreSQL, OpenAI, LangGraph와 같은 외부 의존성의 준비 상태는 확
 | `pnpm test` | 환경변수와 Health Controller 단위 테스트 |
 | `pnpm test:e2e` | Health API HTTP E2E 테스트 |
 | `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Read Tool 통합 테스트 |
+| `pnpm agent:verify` | 실제 PostgreSQL과 OpenAI를 사용하는 Agent Workflow 검증 |
 
 전체 검증은 다음 순서로 실행합니다.
 
@@ -202,6 +223,10 @@ pnpm test:integration
 
 `pnpm test:integration`을 실행하기 전에 `pnpm db:up`, `pnpm db:migrate`,
 `pnpm db:seed`로 테스트 데이터베이스를 준비해야 합니다.
+
+`pnpm agent:verify`는 일반 테스트와 달리 실제 OpenAI API를 호출하므로
+`OPENAI_API_KEY`, `OPENAI_MODEL`, `DATABASE_URL`이 설정된 환경에서 필요할 때만 실행합니다.
+인사, 단일 Tool, 다단계 Tool 경로와 `C001` 인자 전달을 검증합니다.
 
 ## 현재 적용된 Backend 기본 설정
 
@@ -235,12 +260,13 @@ pnpm tsx experiments/tool-calling/index.ts
 
 ## 현재 제한 사항
 
-- Agent HTTP Endpoint와 LangGraph Workflow가 아직 연결되지 않음
-- LangGraph는 아직 `apps/api`에 연결하지 않음
 - 인증·인가 및 Rate Limit 미구현
 - Health API는 DB readiness를 확인하지 않음
+- Tool 실패 재시도, timeout과 오류 응답 매핑 미구현
+- Checkpoint, 사용자 승인과 중단 후 재개 미구현
 
-다음 구현 단계는 Read Tool을 LangGraph와 Agent API에 연결하는 AGENT-17입니다.
+현재 Read 전용 Agent Workflow까지 구현했으며, 다음 단계부터 Write Tool과
+사용자 승인 흐름을 추가할 수 있습니다.
 
 ## 문서
 

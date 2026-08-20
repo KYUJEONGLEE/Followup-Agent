@@ -160,3 +160,92 @@ MVP 구현 순서의 7단계에서 수행한다.
 
 그 전 단계에서는 NestJS 환경, 도메인·스키마, Migration·Seed, API 계약,
 Tool 인터페이스와 Read Tool을 먼저 준비한다.
+
+
+## 7. MVP 구현 결과 (AGENT-17)
+
+### 적용 구조
+
+Spike에서 검증한 반복 구조를 NestJS Backend의 실제 Read Tool과 연결했다.
+
+```text
+POST /agent/runs
+→ AgentService: executionId 생성
+→ AgentWorkflowService: LangGraph 실행
+→ LLM Node: OpenAI Responses API 호출
+→ Conditional Edge: pendingToolCall 유무 확인
+   ├─ 있음: Tool Node → ToolRegistry → PostgreSQL Read Tool → LLM Node
+   └─ 없음: END
+→ answer와 trace 반환
+```
+
+Graph는 `get_customer`, `get_consultations`의 개별 실행 순서를 알지 못한다.
+LLM Node가 반환한 Function Call이 있으면 Tool Node로 이동하고,
+Tool Node는 Registry에서 같은 이름의 Tool을 찾아 실행한다.
+실행 결과를 받은 뒤에는 어떤 Tool이 실행됐는지와 관계없이 LLM Node로 돌아간다.
+
+### State
+
+| 값 | 역할 |
+|---|---|
+| `executionId` | 한 번의 Agent 실행과 Tool 실행을 연결하는 식별자 |
+| `userMessage` | 최초 사용자 요청 |
+| `previousResponseId` | OpenAI Responses API의 이전 응답과 후속 호출 연결 |
+| `pendingToolCall` | 실행 대기 중인 Tool 이름, 인자, `callId` |
+| `toolOutput` | Tool 실행 결과와 원래 Function Call을 연결하는 값 |
+| `finalAnswer` | Function Call이 끝난 뒤 모델이 만든 최종 답변 |
+| `trace` | Node 및 Tool 이름, Tool arguments의 실제 실행 순서 |
+
+### 검증 전략
+
+외부 API 상태와 모델의 비결정성 때문에 일반 단위 테스트는 Scripted LLM을 사용한다.
+이 테스트는 Graph의 세 가지 경로와 State 전달을 결정적으로 검증한다.
+
+- Tool 미사용: `llm → END`
+- 단일 Tool: `llm → get_customer → llm → END`
+- 다단계 Tool: `llm → get_customer → llm → get_consultations → llm → END`
+
+실제 모델의 Tool 선택은 일반 테스트와 분리한 `pnpm agent:verify`로 확인한다.
+2026-08-20에 OpenAI Responses API와 PostgreSQL Seed 데이터를 연결해 실행한 결과는 다음과 같다.
+
+```text
+안녕하세요.
+→ llm
+
+김민수 고객 정보를 알려줘.
+→ llm
+→ get_customer({"name":"김민수"})
+→ llm
+
+김민수 고객의 기본 정보와 최근 상담 내용을 같이 알려줘.
+→ llm
+→ get_customer({"name":"김민수"})
+→ llm
+→ get_consultations({"customer_id":"C001"})
+→ llm
+```
+
+다단계 경로에서 첫 Tool이 PostgreSQL에서 반환한 `C001`이
+두 번째 Tool의 `customer_id` arguments로 사용됐고,
+최종 답변에는 고객 기본 정보와 최근 상담 내용이 함께 포함됐다.
+
+### 직접 구현 Loop와의 대응 관계
+
+| 직접 구현 Loop | LangGraph MVP |
+|---|---|
+| `while (functionCall)` | `Tool Node → LLM Node` 순환 Edge |
+| Function Call 유무를 `if`로 확인 | Conditional Edge가 `pendingToolCall` 확인 |
+| 지역 변수에 이전 응답과 Tool 결과 저장 | 명시적인 State에 저장 |
+| 반복문 안에서 Tool 실행 | Tool Node가 Registry를 통해 실행 |
+
+단순 Tool Calling만 보면 LangGraph가 State, Node, Edge 코드를 추가하므로 더 복잡하다.
+MVP에서는 이후 Write Tool, 사용자 승인, 실패 분기처럼 실행 경로가 늘어날 계획이므로,
+현재의 추가 복잡도를 수용하고 Workflow 경계를 명시적으로 유지한다.
+
+### 현재 경계
+
+- `parallel_tool_calls`는 비활성화해 한 번에 하나의 Tool Call만 처리한다.
+- 최대 Graph 실행 단계는 10으로 제한한다.
+- Tool 실패 retry, timeout, 오류 응답 매핑은 아직 구현하지 않았다.
+- checkpoint, 사용자 승인과 중단 후 재개는 아직 구현하지 않았다.
+- Write Tool은 아직 등록하지 않았다.
