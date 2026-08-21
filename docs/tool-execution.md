@@ -143,7 +143,8 @@ Tool Node는 LLM이 선택한 이름을 Registry에 전달할 뿐이다.
 - 실제 PostgreSQL Seed 데이터를 Repository가 조회하는지 확인
 - Registry를 통해 실제 Tool Handler와 데이터베이스가 연결되는지 확인
 
-AGENT-16에서 `get_customer`, `get_consultations`에 이 전략을 적용한다.
+AGENT-16에서 `get_customer`, `get_consultations`에 이 전략을 적용했다.
+단위 테스트와 별도로 실제 PostgreSQL Seed를 조회하는 Integration Test를 실행한다.
 
 ## 7. 코드 위치
 
@@ -153,3 +154,6 @@ AGENT-16에서 `get_customer`, `get_consultations`에 이 전략을 적용한다
 - Registry: `apps/api/src/tools/tool-registry.ts`
 - 오류 계약: `apps/api/src/tools/tool-execution.error.ts`
 - 단위 테스트: `apps/api/src/tools/tool-registry.spec.ts`
+- Read Tool: `apps/api/src/tools/read/`
+- Repository: `apps/api/src/tools/repositories/`
+- DB 통합 테스트: `apps/api/test/read-tools.integration-spec.ts`

@@ -17,6 +17,7 @@ Customer, Consultation, FollowUpTask 도메인과 PostgreSQL 스키마 설계를
 설계한 스키마를 TypeORM Migration으로 적용하고 C001 테스트 데이터를 구성했습니다.
 Agent 동기 API의 요청, 응답, 오류와 실행 Trace 계약을 정의했습니다.
 Tool 정의, 입력 검증, Handler 실행을 연결하는 공통 Registry를 구현했습니다.
+고객 정보와 상담 이력 Read Tool이 실제 PostgreSQL Seed 데이터를 조회합니다.
 
 ## 프로젝트 목표
 
@@ -187,6 +188,7 @@ PostgreSQL, OpenAI, LangGraph와 같은 외부 의존성의 준비 상태는 확
 | `pnpm api:build` | TypeScript strict 검사 및 NestJS build |
 | `pnpm test` | 환경변수와 Health Controller 단위 테스트 |
 | `pnpm test:e2e` | Health API HTTP E2E 테스트 |
+| `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Read Tool 통합 테스트 |
 
 전체 검증은 다음 순서로 실행합니다.
 
@@ -195,7 +197,11 @@ pnpm api:lint
 pnpm api:build
 pnpm test
 pnpm test:e2e
+pnpm test:integration
 ```
+
+`pnpm test:integration`을 실행하기 전에 `pnpm db:up`, `pnpm db:migrate`,
+`pnpm db:seed`로 테스트 데이터베이스를 준비해야 합니다.
 
 ## 현재 적용된 Backend 기본 설정
 
@@ -229,13 +235,12 @@ pnpm tsx experiments/tool-calling/index.ts
 
 ## 현재 제한 사항
 
-- NestJS 요청 처리 경로와 PostgreSQL이 아직 연결되지 않음
-- 고객 정보 및 상담 이력 Tool 미구현
+- Agent HTTP Endpoint와 LangGraph Workflow가 아직 연결되지 않음
 - LangGraph는 아직 `apps/api`에 연결하지 않음
 - 인증·인가 및 Rate Limit 미구현
 - Health API는 DB readiness를 확인하지 않음
 
-다음 구현 단계는 PostgreSQL 기반 고객·상담 Read Tool을 구현하는 AGENT-16입니다.
+다음 구현 단계는 Read Tool을 LangGraph와 Agent API에 연결하는 AGENT-17입니다.
 
 ## 문서
 
