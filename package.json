@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "api:build": "pnpm --filter @followup-agent/api build",
+    "agent:verify": "pnpm --filter @followup-agent/api agent:verify",
     "api:lint": "pnpm --filter @followup-agent/api lint",
     "api:start": "pnpm --filter @followup-agent/api start",
     "api:start:dev": "pnpm --filter @followup-agent/api start:dev",

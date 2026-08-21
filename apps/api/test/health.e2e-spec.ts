@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import type { Server } from 'node:http';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { DatabaseService } from '../src/database/database.service';
 
 describe('Health API (e2e)', () => {
   let app: INestApplication;
@@ -12,7 +13,10 @@ describe('Health API (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(DatabaseService)
+      .useValue({})
+      .compile();
 
     app = moduleRef.createNestApplication();
     await app.init();
