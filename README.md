@@ -16,6 +16,7 @@ NestJS 개발 환경과 Backend 실행 기반을 구성했으며,
 Customer, Consultation, FollowUpTask 도메인과 PostgreSQL 스키마 설계를 완료했습니다.
 설계한 스키마를 TypeORM Migration으로 적용하고 C001 테스트 데이터를 구성했습니다.
 Agent 동기 API의 요청, 응답, 오류와 실행 Trace 계약을 정의했습니다.
+Tool 정의, 입력 검증, Handler 실행을 연결하는 공통 Registry를 구현했습니다.
 
 ## 프로젝트 목표
 
@@ -234,12 +235,13 @@ pnpm tsx experiments/tool-calling/index.ts
 - 인증·인가 및 Rate Limit 미구현
 - Health API는 DB readiness를 확인하지 않음
 
-다음 구현 단계는 Tool 인터페이스와 실행 구조를 설계하는 AGENT-15입니다.
+다음 구현 단계는 PostgreSQL 기반 고객·상담 Read Tool을 구현하는 AGENT-16입니다.
 
 ## 문서
 
 - [Project Brief](./docs/00-project-brief.md)
 - [도메인 모델 및 PostgreSQL 스키마 설계](./docs/domain-model.md)
 - [Agent API 요청·응답 계약](./docs/api-contract.md)
+- [Tool 인터페이스 및 실행 구조](./docs/tool-execution.md)
 - [Tool Calling 기술 결정](./docs/technical-decisions/tool-calling.md)
 - [LangGraph 기술 결정](./docs/technical-decisions/langgraph.md)
