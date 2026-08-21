@@ -14,6 +14,7 @@ LangGraph를 MVP의 Agent Workflow Orchestration Layer로 채택했습니다.
 
 NestJS 개발 환경과 Backend 실행 기반을 구성했으며,
 Customer, Consultation, FollowUpTask 도메인과 PostgreSQL 스키마 설계를 완료했습니다.
+설계한 스키마를 TypeORM Migration으로 적용하고 C001 테스트 데이터를 구성했습니다.
 
 ## 프로젝트 목표
 
@@ -59,8 +60,8 @@ FollowUp-Agent
 - Node.js 22.23.1
 - pnpm 9.15.0
 
-AGENT-12까지는 PostgreSQL에 실제로 연결하지 않으므로
-Docker와 PostgreSQL을 실행하지 않아도 Backend를 시작할 수 있습니다.
+Backend 프로세스와 Health API만 확인할 때는 PostgreSQL이 필요하지 않습니다.
+Migration, Seed와 데이터 조회 검증에는 Docker 기반 PostgreSQL이 필요합니다.
 
 ## 설치
 
@@ -88,10 +89,50 @@ Copy-Item apps/api/.env.example apps/api/.env
 | `CORS_ORIGIN` | 아니요 | 없음 | 브라우저 접근을 허용할 Web Origin |
 
 현재 `DATABASE_URL`은 PostgreSQL URL 형식만 검증합니다.
-실제 DB 연결, Migration, Seed 데이터는 이후 작업에서 구성합니다.
+Migration과 Seed 스크립트가 이 URL을 사용해 PostgreSQL에 연결합니다.
 
 `.env`에는 비밀번호나 API Key가 포함될 수 있으므로 Git에 커밋하지 않습니다.
 `.env.example`에는 로컬 개발용 예시값만 기록합니다.
+
+## PostgreSQL Migration 및 Seed
+
+Docker Desktop을 실행한 뒤 PostgreSQL 컨테이너를 시작합니다.
+
+```powershell
+pnpm db:up
+```
+
+`compose.yaml`은 PostgreSQL 18.3 이미지를 사용하며 Health Check가 통과할 때까지 기다립니다.
+
+빈 데이터베이스에 아직 적용되지 않은 Migration을 실행합니다.
+
+```powershell
+pnpm db:migrate
+pnpm db:migration:show
+```
+
+C001 김민수 고객과 상담 이력 2건을 구성하고 결과를 확인합니다.
+
+```powershell
+pnpm db:seed
+pnpm db:verify
+```
+
+Seed는 `customer_code`와 `consultation_code`를 기준으로 Upsert하므로 반복 실행해도
+C001 고객과 정의된 상담 이력이 중복 생성되지 않습니다.
+
+가장 최근 Migration을 롤백하려면 다음 명령을 사용합니다.
+
+```powershell
+pnpm db:revert
+```
+
+롤백은 스키마와 저장 데이터를 제거할 수 있으므로 로컬 검증 DB에서만 사용합니다.
+컨테이너를 중지하고 제거하되 데이터 볼륨을 유지하려면 다음 명령을 사용합니다.
+
+```powershell
+pnpm db:down
+```
 
 ## Backend 실행
 
@@ -186,16 +227,14 @@ pnpm tsx experiments/tool-calling/index.ts
 
 ## 현재 제한 사항
 
-- PostgreSQL 실제 연결 및 Docker 구성 없음
-- 설계한 도메인 모델과 DB 스키마를 실제 Migration으로 적용하지 않음
-- Migration 및 Seed 데이터 없음
+- NestJS 요청 처리 경로와 PostgreSQL이 아직 연결되지 않음
 - Agent API 요청·응답 계약 미정의
 - 고객 정보 및 상담 이력 Tool 미구현
 - LangGraph는 아직 `apps/api`에 연결하지 않음
 - 인증·인가 및 Rate Limit 미구현
 - Health API는 DB readiness를 확인하지 않음
 
-다음 구현 단계는 Docker 기반 PostgreSQL, Migration, Seed 데이터를 구성하는 AGENT-13입니다.
+다음 구현 단계는 Agent API 요청·응답 계약을 정의하는 AGENT-14입니다.
 
 ## 문서
 
