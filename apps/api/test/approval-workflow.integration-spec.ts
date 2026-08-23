@@ -119,12 +119,13 @@ describe('PostgreSQL Approval Workflow (integration)', () => {
     expect(pending.status).toBe('awaiting_approval');
     await expect(countTasks(executions.required)).resolves.toBe(0);
 
-    const approved = await workflow.resume(
-      executions.required.executionId,
-      'approve',
-    );
+    const [approved, concurrentDuplicate] = await Promise.all([
+      workflow.resume(executions.required.executionId, 'approve'),
+      workflow.resume(executions.required.executionId, 'approve'),
+    ]);
 
     expect(approved.status).toBe('completed');
+    expect(concurrentDuplicate).toEqual(approved);
     await expect(countTasks(executions.required)).resolves.toBe(1);
 
     const duplicate = await workflow.resume(

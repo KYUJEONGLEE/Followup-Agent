@@ -289,10 +289,10 @@ describe('AgentWorkflowService', () => {
     expect(writer.inputs).toHaveLength(0);
     expect(llm.requests).toHaveLength(1);
 
-    const approved = await workflow.resume(
-      'execution-write-required',
-      'approve',
-    );
+    const [approved, concurrentDuplicate] = await Promise.all([
+      workflow.resume('execution-write-required', 'approve'),
+      workflow.resume('execution-write-required', 'approve'),
+    ]);
 
     expect(approved.status).toBe('completed');
     expect(approved.answer).toBe('후속 업무를 생성했습니다.');
@@ -322,13 +322,14 @@ describe('AgentWorkflowService', () => {
     ]);
     expect(writer.inputs).toHaveLength(1);
     expect(llm.requests[1]?.toolOutput?.output).toContain('task-1');
+    expect(concurrentDuplicate).toEqual(approved);
 
-    const duplicateApproval = await workflow.resume(
+    const sequentialDuplicate = await workflow.resume(
       'execution-write-required',
       'approve',
     );
 
-    expect(duplicateApproval).toEqual(approved);
+    expect(sequentialDuplicate).toEqual(approved);
     expect(writer.inputs).toHaveLength(1);
     expect(llm.requests).toHaveLength(2);
   });

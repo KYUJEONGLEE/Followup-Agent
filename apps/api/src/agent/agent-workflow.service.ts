@@ -292,6 +292,10 @@ function createAgentGraph(
 @Injectable()
 export class AgentWorkflowService {
   private readonly graph: ReturnType<typeof createAgentGraph>;
+  private readonly activeResumes = new Map<
+    string,
+    { decision: ApprovalDecision; promise: Promise<AgentRunResponse> }
+  >();
 
   constructor(
     @Inject(AGENT_LLM_CLIENT) llmClient: AgentLlmClient,
@@ -317,7 +321,34 @@ export class AgentWorkflowService {
     return this.getResponse(executionId);
   }
 
-  async resume(
+  resume(
+    executionId: string,
+    decision: ApprovalDecision,
+  ): Promise<AgentRunResponse> {
+    const activeResume = this.activeResumes.get(executionId);
+
+    if (activeResume) {
+      if (activeResume.decision === decision) {
+        return activeResume.promise;
+      }
+
+      return Promise.reject(
+        new ConflictException('다른 승인 결정을 이미 처리하고 있습니다.'),
+      );
+    }
+
+    const promise = this.resumeOnce(executionId, decision).finally(() => {
+      if (this.activeResumes.get(executionId)?.promise === promise) {
+        this.activeResumes.delete(executionId);
+      }
+    });
+
+    this.activeResumes.set(executionId, { decision, promise });
+
+    return promise;
+  }
+
+  private async resumeOnce(
     executionId: string,
     decision: ApprovalDecision,
   ): Promise<AgentRunResponse> {
