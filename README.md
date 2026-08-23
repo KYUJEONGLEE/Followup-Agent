@@ -20,6 +20,8 @@ Tool 정의, 입력 검증, Handler 실행을 연결하는 공통 Registry를 �
 고객 정보와 상담 이력 Read Tool이 실제 PostgreSQL Seed 데이터를 조회합니다.
 LangGraph Workflow와 Agent HTTP API를 연결해 실제 LLM이 Read Tool을 선택하고
 그 결과를 다음 판단에 사용하는 반복 실행 흐름을 구현했습니다.
+후속 업무 Write Tool과 DB 멱등성 처리를 구현했으며,
+사용자 승인 Workflow가 완성되기 전까지 활성 Agent Registry에는 등록하지 않습니다.
 
 ## 프로젝트 목표
 
@@ -208,7 +210,7 @@ LLM이 Function Call을 반환하면 공통 Tool Registry가 해당 Tool을 실�
 | `pnpm api:build` | TypeScript strict 검사 및 NestJS build |
 | `pnpm test` | 환경변수와 Health Controller 단위 테스트 |
 | `pnpm test:e2e` | Health API HTTP E2E 테스트 |
-| `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Read Tool 통합 테스트 |
+| `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Read/Write Tool 통합 테스트 |
 | `pnpm agent:verify` | 실제 PostgreSQL과 OpenAI를 사용하는 Agent Workflow 검증 |
 
 전체 검증은 다음 순서로 실행합니다.
@@ -264,9 +266,10 @@ pnpm tsx experiments/tool-calling/index.ts
 - Health API는 DB readiness를 확인하지 않음
 - Tool 실패 재시도, timeout과 오류 응답 매핑 미구현
 - Checkpoint, 사용자 승인과 중단 후 재개 미구현
+- Write Tool은 구현됐지만 승인 정책 연결 전이므로 Agent API에서 비활성 상태
 
-현재 Read 전용 Agent Workflow까지 구현했으며, 다음 단계부터 Write Tool과
-사용자 승인 흐름을 추가할 수 있습니다.
+현재 Read Agent Workflow와 비활성 Write Tool까지 구현했으며,
+다음 단계에서 `required | auto` 승인 정책과 실행 재개 흐름을 연결합니다.
 
 ## 문서
 
@@ -274,5 +277,6 @@ pnpm tsx experiments/tool-calling/index.ts
 - [도메인 모델 및 PostgreSQL 스키마 설계](./docs/domain-model.md)
 - [Agent API 요청·응답 계약](./docs/api-contract.md)
 - [Tool 인터페이스 및 실행 구조](./docs/tool-execution.md)
+- [후속 업무 Write Tool](./docs/write-tool.md)
 - [Tool Calling 기술 결정](./docs/technical-decisions/tool-calling.md)
 - [LangGraph 기술 결정](./docs/technical-decisions/langgraph.md)

@@ -30,6 +30,7 @@ const customerDefinition = {
 describe('ToolRegistry', () => {
   it('등록된 Tool 정의를 LLM에 전달할 형태로 반환한다', () => {
     const tool = defineAgentTool({
+      effect: 'read',
       definition: customerDefinition,
       inputSchema: customerInputSchema,
       handler: ({ name }) =>
@@ -38,6 +39,7 @@ describe('ToolRegistry', () => {
     const registry = new ToolRegistry([tool]);
 
     expect(registry.listDefinitions()).toEqual([customerDefinition]);
+    expect(registry.getEffect('get_customer')).toBe('read');
   });
 
   it('JSON arguments를 검증한 뒤 Handler를 실행한다', async () => {
@@ -49,6 +51,7 @@ describe('ToolRegistry', () => {
     );
     const registry = new ToolRegistry([
       defineAgentTool({
+        effect: 'read',
         definition: customerDefinition,
         inputSchema: customerInputSchema,
         handler,
@@ -88,6 +91,7 @@ describe('ToolRegistry', () => {
     );
     const registry = new ToolRegistry([
       defineAgentTool({
+        effect: 'read',
         definition: customerDefinition,
         inputSchema: customerInputSchema,
         handler,
@@ -112,6 +116,7 @@ describe('ToolRegistry', () => {
   it('데이터 미존재를 실행 오류와 다른 결과로 반환한다', async () => {
     const registry = new ToolRegistry([
       defineAgentTool({
+        effect: 'read',
         definition: customerDefinition,
         inputSchema: customerInputSchema,
         handler: () =>
@@ -153,6 +158,7 @@ describe('ToolRegistry', () => {
   it('중복된 Tool 이름 등록을 거부한다', () => {
     const createTool = () =>
       defineAgentTool({
+        effect: 'read',
         definition: customerDefinition,
         inputSchema: customerInputSchema,
         handler: () =>
@@ -161,6 +167,14 @@ describe('ToolRegistry', () => {
 
     expect(() => new ToolRegistry([createTool(), createTool()])).toThrow(
       '중복된 Tool 이름',
+    );
+  });
+
+  it('등록되지 않은 Tool의 effect 조회를 거부한다', () => {
+    const registry = new ToolRegistry([]);
+
+    expect(() => registry.getEffect('unknown')).toThrow(
+      '지원하지 않는 Tool입니다: unknown',
     );
   });
 });

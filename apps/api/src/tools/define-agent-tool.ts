@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AgentToolDefinition } from './contracts/tool-definition';
+import type { ToolEffect } from './contracts/tool-effect';
 import type { ToolResult } from './contracts/tool-result';
 import {
   TOOL_ERROR_CODES,
@@ -17,6 +18,7 @@ export interface ToolInvocation {
 }
 
 export interface ExecutableAgentTool {
+  effect: ToolEffect;
   definition: AgentToolDefinition;
   invoke(
     rawArguments: unknown,
@@ -28,6 +30,7 @@ export interface AgentToolConfig<
   TInput extends Record<string, unknown>,
   TOutput,
 > {
+  effect: ToolEffect;
   definition: AgentToolDefinition;
   inputSchema: z.ZodType<TInput>;
   handler(
@@ -41,6 +44,7 @@ export function defineAgentTool<
   TOutput,
 >(config: AgentToolConfig<TInput, TOutput>): ExecutableAgentTool {
   return {
+    effect: config.effect,
     definition: config.definition,
     async invoke(
       rawArguments: unknown,

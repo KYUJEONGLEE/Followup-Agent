@@ -17,6 +17,7 @@ const inputSchema = z
 
 export function createGetConsultationsTool(repository: ConsultationReader) {
   return defineAgentTool({
+    effect: 'read',
     definition: {
       type: 'function',
       name: 'get_consultations',

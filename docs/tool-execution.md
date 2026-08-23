@@ -27,16 +27,18 @@ flowchart LR
 
 ## 3. Tool 정의 계약
 
-모든 Tool은 `defineAgentTool()`로 다음 세 요소를 함께 정의한다.
+모든 Tool은 `defineAgentTool()`로 다음 네 요소를 함께 정의한다.
 
 | 요소 | 소비자 | 역할 |
 |---|---|---|
+| `effect` | Backend Workflow | 데이터 변경 여부를 `read`, `write`로 구분 |
 | `definition` | LLM | 이름, 설명, JSON Schema와 strict 설정 |
 | `inputSchema` | Backend | 실제 실행 직전 arguments 런타임 검증 |
 | `handler` | Backend | 검증된 입력으로 업무 기능 실행 |
 
 ```typescript
 const exampleTool = defineAgentTool({
+  effect: 'read',
   definition: {
     type: 'function',
     name: 'example_tool',
@@ -63,6 +65,10 @@ const exampleTool = defineAgentTool({
 JSON Schema는 LLM이 올바른 Function Call을 만들도록 안내하고,
 Zod Schema는 LLM 출력이 실제 Handler에 들어가기 전에 Backend 경계에서 검증한다.
 LLM이 strict schema를 사용하더라도 Backend 검증은 생략하지 않는다.
+
+`effect`는 OpenAI Function Schema에 포함하지 않는 내부 정책 정보다.
+AGENT-18부터 Registry가 Tool 이름으로 effect를 조회할 수 있으며,
+AGENT-19의 승인 Workflow는 개별 Tool 이름이 아닌 effect를 기준으로 분기한다.
 
 ## 4. 실행 결과와 오류 구분
 
@@ -130,6 +136,7 @@ Tool Node는 LLM이 선택한 이름을 Registry에 전달할 뿐이다.
 - `not_found`가 실행 오류와 구분되는지 확인
 - 미지원 Tool 이름을 거부하는지 확인
 - 중복 Tool 이름 등록을 거부하는지 확인
+- 등록된 Tool의 `read`, `write` effect를 조회할 수 있는지 확인
 
 ### 개별 Tool 단위 테스트
 
@@ -143,17 +150,21 @@ Tool Node는 LLM이 선택한 이름을 Registry에 전달할 뿐이다.
 - 실제 PostgreSQL Seed 데이터를 Repository가 조회하는지 확인
 - Registry를 통해 실제 Tool Handler와 데이터베이스가 연결되는지 확인
 
-AGENT-16에서 `get_customer`, `get_consultations`에 이 전략을 적용했다.
-단위 테스트와 별도로 실제 PostgreSQL Seed를 조회하는 Integration Test를 실행한다.
+AGENT-16에서 `get_customer`, `get_consultations` Read Tool에 이 전략을 적용했다.
+AGENT-18에서는 `create_follow_up_task` Write Tool의 실제 생성, 관계 검증과
+멱등성 처리를 PostgreSQL Integration Test로 검증한다.
 
 ## 7. 코드 위치
 
 - Tool 정의 계약: `apps/api/src/tools/contracts/tool-definition.ts`
+- Tool effect 계약: `apps/api/src/tools/contracts/tool-effect.ts`
 - Tool 결과 계약: `apps/api/src/tools/contracts/tool-result.ts`
 - Tool 생성 함수: `apps/api/src/tools/define-agent-tool.ts`
 - Registry: `apps/api/src/tools/tool-registry.ts`
 - 오류 계약: `apps/api/src/tools/tool-execution.error.ts`
 - 단위 테스트: `apps/api/src/tools/tool-registry.spec.ts`
 - Read Tool: `apps/api/src/tools/read/`
+- Write Tool: `apps/api/src/tools/write/`
 - Repository: `apps/api/src/tools/repositories/`
 - DB 통합 테스트: `apps/api/test/read-tools.integration-spec.ts`
+- Write Tool DB 통합 테스트: `apps/api/test/write-tool.integration-spec.ts`
