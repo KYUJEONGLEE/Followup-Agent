@@ -6,9 +6,10 @@ import { ToolRegistry } from '../src/tools/tool-registry';
 import { ToolsModule } from '../src/tools/tools.module';
 
 describe('PostgreSQL Read Tools (integration)', () => {
-  let moduleRef: TestingModule;
+  let moduleRef: TestingModule | undefined;
   let registry: ToolRegistry;
-  let database: DatabaseService;
+  let database: DatabaseService | undefined;
+  let cleanupCustomerCreated = false;
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -20,9 +21,10 @@ describe('PostgreSQL Read Tools (integration)', () => {
     await moduleRef.init();
 
     registry = moduleRef.get(ToolRegistry);
-    database = moduleRef.get(DatabaseService);
+    const initializedDatabase = moduleRef.get(DatabaseService);
+    database = initializedDatabase;
 
-    await database.query(
+    await initializedDatabase.query(
       `
         INSERT INTO customers (customer_code, name, status)
         VALUES ('C_EMPTY', '상담없는고객', 'active')
@@ -30,13 +32,19 @@ describe('PostgreSQL Read Tools (integration)', () => {
         SET name = EXCLUDED.name, status = EXCLUDED.status
       `,
     );
+    cleanupCustomerCreated = true;
   });
 
   afterAll(async () => {
-    await database.query(
-      `DELETE FROM customers WHERE customer_code = 'C_EMPTY'`,
-    );
-    await moduleRef.close();
+    try {
+      if (cleanupCustomerCreated && database) {
+        await database.query(
+          `DELETE FROM customers WHERE customer_code = 'C_EMPTY'`,
+        );
+      }
+    } finally {
+      await moduleRef?.close();
+    }
   });
 
   it('get_customer가 실제 Seed의 C001 고객을 조회한다', async () => {
