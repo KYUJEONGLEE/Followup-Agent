@@ -21,7 +21,8 @@ Tool 정의, 입력 검증, Handler 실행을 연결하는 공통 Registry를 �
 LangGraph Workflow와 Agent HTTP API를 연결해 실제 LLM이 Read Tool을 선택하고
 그 결과를 다음 판단에 사용하는 반복 실행 흐름을 구현했습니다.
 후속 업무 Write Tool과 DB 멱등성 처리를 구현했으며,
-사용자 승인 Workflow가 완성되기 전까지 활성 Agent Registry에는 등록하지 않습니다.
+Write Tool 실행 전 사용자 승인을 요청하거나 서버가 허용한 `auto` 정책으로
+즉시 실행하는 LangGraph 중단·재개 Workflow를 연결했습니다.
 
 ## 프로젝트 목표
 
@@ -96,6 +97,7 @@ Copy-Item apps/api/.env.example apps/api/.env
 | `CORS_ORIGIN` | 아니요 | 없음 | 브라우저 접근을 허용할 Web Origin |
 | `OPENAI_API_KEY` | 예 | 없음 | OpenAI Responses API 인증 키 |
 | `OPENAI_MODEL` | 아니요 | `gpt-5.6` | Agent가 사용할 OpenAI 모델 |
+| `AGENT_ALLOW_AUTO_WRITE` | 아니요 | `false` | 요청자가 선택한 `auto` Write 실행을 서버가 허용할지 여부 |
 
 현재 `DATABASE_URL`은 PostgreSQL URL 형식만 검증합니다.
 Migration과 Seed 스크립트가 이 URL을 사용해 PostgreSQL에 연결합니다.
@@ -202,6 +204,21 @@ Invoke-RestMethod `
 LLM이 Function Call을 반환하면 공통 Tool Registry가 해당 Tool을 실행하고,
 그 결과를 다시 LLM에 전달합니다. Function Call이 없을 때 Workflow가 종료됩니다.
 
+Write Tool 요청의 기본 정책은 `required`입니다. 최초 응답이
+`awaiting_approval`이면 같은 `executionId`로 승인 또는 거절합니다.
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:3000/agent/runs/{executionId}/approval `
+  -ContentType 'application/json' `
+  -Body '{"decision":"approve"}'
+```
+
+요청자가 `writeApprovalMode: "auto"`를 선택해도
+`AGENT_ALLOW_AUTO_WRITE=true`인 서버에서만 즉시 실행됩니다.
+서버가 허용하지 않으면 실제 적용 모드는 `required`로 낮아집니다.
+
 ## 품질 검증
 
 | 명령 | 역할 |
@@ -210,7 +227,7 @@ LLM이 Function Call을 반환하면 공통 Tool Registry가 해당 Tool을 실�
 | `pnpm api:build` | TypeScript strict 검사 및 NestJS build |
 | `pnpm test` | 환경변수와 Health Controller 단위 테스트 |
 | `pnpm test:e2e` | Health API HTTP E2E 테스트 |
-| `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Read/Write Tool 통합 테스트 |
+| `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Read/Write Tool 및 승인 Workflow 통합 테스트 |
 | `pnpm agent:verify` | 실제 PostgreSQL과 OpenAI를 사용하는 Agent Workflow 검증 |
 
 전체 검증은 다음 순서로 실행합니다.
@@ -265,11 +282,11 @@ pnpm tsx experiments/tool-calling/index.ts
 - 인증·인가 및 Rate Limit 미구현
 - Health API는 DB readiness를 확인하지 않음
 - Tool 실패 재시도, timeout과 오류 응답 매핑 미구현
-- Checkpoint, 사용자 승인과 중단 후 재개 미구현
-- Write Tool은 구현됐지만 승인 정책 연결 전이므로 Agent API에서 비활성 상태
+- 승인 checkpoint는 프로세스 메모리에 저장되므로 서버 재시작과 다중 인스턴스를 지원하지 않음
+- `auto` 허용은 서버 전역 설정이며 사용자별 권한 체계는 아직 미구현
 
-현재 Read Agent Workflow와 비활성 Write Tool까지 구현했으며,
-다음 단계에서 `required | auto` 승인 정책과 실행 재개 흐름을 연결합니다.
+현재 Read/Write Agent Workflow와 사용자 승인·거절·중복 재개까지 구현했으며,
+다음 단계에서는 핵심 시나리오 E2E와 운영 경계를 정리합니다.
 
 ## 문서
 

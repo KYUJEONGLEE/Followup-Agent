@@ -43,6 +43,10 @@ const environmentSchema = z.object({
   CORS_ORIGIN: httpUrl.optional(),
   OPENAI_API_KEY: z.string().min(1),
   OPENAI_MODEL: z.string().min(1).default('gpt-5.6'),
+  AGENT_ALLOW_AUTO_WRITE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 export type EnvironmentVariables = z.infer<typeof environmentSchema>;

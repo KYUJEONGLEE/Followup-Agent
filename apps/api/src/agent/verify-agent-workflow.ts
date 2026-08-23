@@ -44,8 +44,10 @@ async function main(): Promise<void> {
 
     for (const verificationCase of cases) {
       const result = await workflow.run(randomUUID(), verificationCase.message);
-      const trace = result.trace.map(
-        (entry) => `${entry.type}:${entry.name}`,
+      const trace = result.trace.map((entry) =>
+        entry.type === 'approval'
+          ? `${entry.type}:${entry.decision}:${entry.toolName}`
+          : `${entry.type}:${entry.name}`,
       );
 
       assert.deepEqual(trace, verificationCase.expectedTrace);

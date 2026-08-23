@@ -245,7 +245,65 @@ MVP에서는 이후 Write Tool, 사용자 승인, 실패 분기처럼 실행 경
 ### 현재 경계
 
 - `parallel_tool_calls`는 비활성화해 한 번에 하나의 Tool Call만 처리한다.
-- 최대 Graph 실행 단계는 10으로 제한한다.
+- 최대 Graph 실행 단계는 20으로 제한한다.
 - Tool 실패 retry, timeout, 오류 응답 매핑은 아직 구현하지 않았다.
-- checkpoint, 사용자 승인과 중단 후 재개는 아직 구현하지 않았다.
-- Write Tool은 아직 등록하지 않았다.
+- AGENT-19에서 checkpoint, 사용자 승인과 중단 후 재개를 구현했다.
+- Write Tool은 Registry에 등록됐지만 `effect: write` 정책을 통과해야 실행된다.
+
+## 8. 사용자 승인 Workflow 구현 결과 (AGENT-19)
+
+### 선택한 구조
+
+```text
+LLM Function Call
+→ Tool effect 확인
+   ├─ read  → Tool 실행
+   └─ write
+      ├─ required → 승인 요청 State 저장 → interrupt
+      │              ├─ approve → Tool 실행 → LLM
+      │              └─ reject  → DB 변경 없이 END
+      └─ auto     → 자동 승인 trace → Tool 실행 → LLM
+```
+
+`executionId`를 LangGraph의 `thread_id`로 사용한다.
+따라서 최초 HTTP 요청이 끝난 뒤에도 같은 실행 ID로 checkpoint를 찾아
+`Command({ resume: decision })`으로 중단된 Node를 재개할 수 있다.
+
+### State 추가 값
+
+| 값 | 역할 |
+|---|---|
+| `writeApprovalMode` | Backend가 최종 적용한 `required | auto` 정책 |
+| `approval.status` | `none | pending | approved | rejected` 상태 |
+| `approval.toolName` | 승인 대상 Write Tool 이름 |
+| `approval.arguments` | 사용자에게 보여줄 실행 예정 인자 |
+
+승인 결과는 `approval` trace로 기록하고,
+실제 Tool 실행은 기존 `tool` trace로 별도 기록한다.
+따라서 “승인했다”와 “DB 변경 Tool이 실행됐다”를 구분할 수 있다.
+
+### 안전장치
+
+- 기본값은 `required`다.
+- 요청자가 `auto`를 선택해도 서버의 `AGENT_ALLOW_AUTO_WRITE`가 허용해야 한다.
+- 승인 전에는 `execute_tool` Node로 이동하지 않는다.
+- 승인 재개는 기존 `executionId`에 저장된 pending 상태만 사용한다.
+- 순차·동시 중복 승인은 완료 응답 또는 같은 진행 중 작업을 공유해 재실행하지 않는다.
+- Write Tool의 DB 멱등성 키가 동시·재시도 상황의 최종 중복 생성을 방지한다.
+
+### 검증 결과
+
+- 승인 전 PostgreSQL 생성 0건
+- 승인 후 생성 1건
+- 같은 승인 재전송 후에도 1건
+- 거절 시 생성 0건
+- `auto` 허용 경로는 interrupt 없이 생성 1건
+- Read Tool과 Tool 미사용 경로는 기존 동작 유지
+
+### 현재 한계
+
+MVP checkpointer는 프로세스 메모리의 `MemorySaver`다.
+그래서 현재 구현은 단일 프로세스에서 승인 중단·재개 구조를 검증한 결과이며,
+서버 재시작 복구나 여러 인스턴스 간 재개를 보장하지 않는다.
+운영 단계에서는 PostgreSQL 또는 Redis 기반 영속 checkpointer와
+사용자별 승인 권한, 감사 로그를 추가해야 한다.

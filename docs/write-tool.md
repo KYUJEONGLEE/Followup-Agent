@@ -5,17 +5,15 @@
 AGENT-18에서는 고객에게 후속 관리 업무를 생성하는
 `create_follow_up_task` Tool과 PostgreSQL Repository를 구현한다.
 
-Write Tool 코드는 실제 DB 생성을 수행할 수 있지만,
-현재 `ToolsModule`의 활성 Registry에는 등록하지 않는다.
-따라서 기존 Agent API와 LLM은 이 Tool을 조회하거나 실행할 수 없다.
+AGENT-19에서 `ToolsModule`의 활성 Registry와 LangGraph 승인 Workflow를 연결했다.
+LLM은 이 Tool을 선택할 수 있지만 Backend가 `effect: write`를 확인하므로,
+기본 정책에서는 사용자 승인 전 실제 Handler를 실행하지 않는다.
 
 ```text
-구현 완료: Tool → Repository → PostgreSQL
-아직 미연결: LLM → 승인 정책 → Write Tool
+LLM → Write Function Call → Backend 승인 정책
+                         ├─ required → checkpoint → interrupt
+                         └─ auto     → Write Tool
 ```
-
-승인 없이 데이터를 변경하지 않는 이 경계는 AGENT-19에서
-`required | auto` 실행 정책을 Graph에 연결할 때까지 유지한다.
 
 ## 2. 입력 계약
 
@@ -82,13 +80,13 @@ create_follow_up_task → write
 ```
 
 `effect`는 LLM 설명이 아닌 Backend 승인 정책에 사용한다.
-AGENT-19에서는 Write Function Call이 발생했을 때 다음처럼 분기한다.
+Write Function Call이 발생하면 다음처럼 분기한다.
 
 ```text
 writeApprovalMode = required
 → 실행 내용을 checkpoint에 저장
 → interrupt
-→ 사용자 승인 후 Write Tool 실행
+→ 사용자 승인 후 Write Tool 실행 또는 거절 후 종료
 
 writeApprovalMode = auto
 → 서버가 auto 권한을 허용한 경우 즉시 Write Tool 실행
@@ -96,6 +94,24 @@ writeApprovalMode = auto
 
 기본 정책은 `required`이며, 요청값만으로 더 높은 권한을 얻을 수 없도록
 Backend 정책이 최종 실행 모드를 결정해야 한다.
+
+요청자가 `auto`를 선택하더라도 `AGENT_ALLOW_AUTO_WRITE=true`일 때만
+실제 `auto`가 적용된다. 허용되지 않은 요청은 `required`로 낮춘다.
+
+승인 재개 Endpoint는 `executionId`로 checkpoint를 찾는다.
+
+```text
+POST /agent/runs/{executionId}/approval
+{ "decision": "approve" | "reject" }
+```
+
+같은 승인 결정을 다시 보내면 이미 완료된 응답을 반환하고 Tool을 재실행하지 않는다.
+동시에 들어온 같은 승인도 한 프로세스 안에서는 하나의 재개 작업을 공유한다.
+반대 결정을 나중에 보내면 `409 Conflict`로 거부한다.
+
+현재 checkpointer는 `MemorySaver`이므로 단일 프로세스 MVP 검증 범위다.
+서버 재시작과 다중 인스턴스 환경에서는 PostgreSQL 또는 Redis 기반의
+영속 checkpointer로 교체해야 한다.
 
 ## 6. 검증
 
@@ -115,6 +131,10 @@ PostgreSQL 통합 테스트는 다음 항목을 확인한다.
 - 없는 고객에 대한 생성 거부
 - 다른 고객 소유 상담 연결 거부
 - 테스트 데이터 정리
+- 승인 전 미생성, 승인 후 1건 생성
+- 거절 시 미생성
+- 같은 실행의 중복 승인 후에도 1건 유지
+- `auto` 정책의 즉시 실행
 
 ## 7. 코드 위치
 
