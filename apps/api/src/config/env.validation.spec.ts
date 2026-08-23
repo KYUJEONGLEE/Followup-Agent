@@ -18,6 +18,7 @@ describe('validateEnvironment', () => {
       DATABASE_URL: databaseUrl,
       OPENAI_API_KEY: openAiApiKey,
       OPENAI_MODEL: 'gpt-5.6',
+      AGENT_ALLOW_AUTO_WRITE: false,
     });
   });
 
@@ -30,6 +31,7 @@ describe('validateEnvironment', () => {
         CORS_ORIGIN: 'http://localhost:5173',
         OPENAI_API_KEY: openAiApiKey,
         OPENAI_MODEL: 'gpt-test',
+        AGENT_ALLOW_AUTO_WRITE: 'true',
       }),
     ).toEqual({
       NODE_ENV: 'test',
@@ -38,7 +40,18 @@ describe('validateEnvironment', () => {
       CORS_ORIGIN: 'http://localhost:5173',
       OPENAI_API_KEY: openAiApiKey,
       OPENAI_MODEL: 'gpt-test',
+      AGENT_ALLOW_AUTO_WRITE: true,
     });
+  });
+
+  it('AGENT_ALLOW_AUTO_WRITE는 true 또는 false만 허용한다', () => {
+    expect(() =>
+      validateEnvironment({
+        DATABASE_URL: databaseUrl,
+        OPENAI_API_KEY: openAiApiKey,
+        AGENT_ALLOW_AUTO_WRITE: 'yes',
+      }),
+    ).toThrow('AGENT_ALLOW_AUTO_WRITE');
   });
 
   it('DATABASE_URL이 없으면 실패한다', () => {

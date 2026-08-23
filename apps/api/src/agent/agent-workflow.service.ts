@@ -16,6 +16,7 @@ import {
   type AgentLlmClient,
 } from './llm/agent-llm-client';
 import { ToolRegistry } from '../tools/tool-registry';
+import type { WriteApprovalMode } from './contracts/write-approval';
 
 const AGENT_RECURSION_LIMIT = 10;
 
@@ -41,6 +42,13 @@ const traceEntrySchema = z.discriminatedUnion('type', [
     type: z.literal('tool'),
     name: z.string(),
     arguments: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    sequence: z.number().int().positive(),
+    type: z.literal('approval'),
+    decision: z.enum(['requested', 'approved', 'rejected']),
+    mode: z.enum(['required', 'auto']),
+    toolName: z.string(),
   }),
 ]);
 
@@ -143,7 +151,11 @@ export class AgentWorkflowService {
     this.graph = createAgentGraph(llmClient, toolRegistry);
   }
 
-  async run(executionId: string, userMessage: string): Promise<AgentRunResponse> {
+  async run(
+    executionId: string,
+    userMessage: string,
+    writeApprovalMode: WriteApprovalMode = 'required',
+  ): Promise<AgentRunResponse> {
     const state = await this.graph.invoke(
       {
         executionId,
@@ -154,7 +166,10 @@ export class AgentWorkflowService {
 
     return {
       executionId,
+      status: 'completed',
       answer: state.finalAnswer,
+      approval: null,
+      writeApprovalMode,
       trace: state.trace,
     };
   }

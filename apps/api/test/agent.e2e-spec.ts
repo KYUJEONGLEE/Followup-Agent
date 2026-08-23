@@ -54,7 +54,10 @@ describe('Agent API (e2e)', () => {
 
     expect(response.body).toEqual({
       executionId: expect.any(String),
+      status: 'completed',
       answer: '안녕하세요!',
+      approval: null,
+      writeApprovalMode: 'required',
       trace: [{ sequence: 1, type: 'node', name: 'llm' }],
     });
   });

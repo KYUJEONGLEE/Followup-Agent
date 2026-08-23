@@ -82,7 +82,10 @@ describe('AgentWorkflowService', () => {
 
     expect(result).toEqual({
       executionId: 'execution-1',
+      status: 'completed',
       answer: '안녕하세요!',
+      approval: null,
+      writeApprovalMode: 'required',
       trace: [{ sequence: 1, type: 'node', name: 'llm' }],
     });
     expect(llm.requests).toHaveLength(1);

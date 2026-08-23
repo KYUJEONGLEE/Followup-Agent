@@ -29,7 +29,34 @@ describe('RunAgentRequestDto', () => {
       metadata,
     );
 
-    expect(result).toEqual({ message: '김민수 고객 정보를 알려줘.' });
+    expect(result).toEqual({
+      message: '김민수 고객 정보를 알려줘.',
+      writeApprovalMode: 'required',
+    });
+  });
+
+  it('요청자가 auto Write 정책을 선택할 수 있다', async () => {
+    const result: unknown = await createValidationPipe().transform(
+      {
+        message: '김민수 고객의 후속 업무를 만들어줘.',
+        writeApprovalMode: 'auto',
+      },
+      metadata,
+    );
+
+    expect(result).toEqual({
+      message: '김민수 고객의 후속 업무를 만들어줘.',
+      writeApprovalMode: 'auto',
+    });
+  });
+
+  it('지원하지 않는 Write 승인 정책을 거부한다', async () => {
+    await expect(
+      createValidationPipe().transform(
+        { message: '후속 업무를 만들어줘.', writeApprovalMode: 'always' },
+        metadata,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it.each([{ message: '' }, { message: '   ' }, { message: 123 }])(
