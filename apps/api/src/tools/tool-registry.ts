@@ -1,4 +1,5 @@
 import type { AgentToolDefinition } from './contracts/tool-definition';
+import type { ToolEffect } from './contracts/tool-effect';
 import type {
   ExecutableAgentTool,
   ToolExecutionContext,
@@ -40,18 +41,15 @@ export class ToolRegistry {
     return [...this.toolsByName.values()].map((tool) => tool.definition);
   }
 
+  getEffect(toolName: string): ToolEffect {
+    return this.getTool(toolName).effect;
+  }
+
   async execute(
     call: ToolCallRequest,
     executionId: string,
   ): Promise<ToolCallResult> {
-    const tool = this.toolsByName.get(call.name);
-
-    if (!tool) {
-      throw new ToolExecutionError(
-        TOOL_ERROR_CODES.notSupported,
-        `지원하지 않는 Tool입니다: ${call.name}`,
-      );
-    }
+    const tool = this.getTool(call.name);
 
     const rawArguments = this.parseArguments(call.name, call.arguments);
     const context: ToolExecutionContext = {
@@ -66,6 +64,19 @@ export class ToolRegistry {
       arguments: invocation.arguments,
       result: invocation.result,
     };
+  }
+
+  private getTool(toolName: string): ExecutableAgentTool {
+    const tool = this.toolsByName.get(toolName);
+
+    if (!tool) {
+      throw new ToolExecutionError(
+        TOOL_ERROR_CODES.notSupported,
+        `지원하지 않는 Tool입니다: ${toolName}`,
+      );
+    }
+
+    return tool;
   }
 
   private parseArguments(toolName: string, rawArguments: unknown): unknown {

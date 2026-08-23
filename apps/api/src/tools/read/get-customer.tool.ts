@@ -19,6 +19,7 @@ const inputSchema = z
 
 export function createGetCustomerTool(repository: CustomerReader) {
   return defineAgentTool({
+    effect: 'read',
     definition: {
       type: 'function',
       name: 'get_customer',
