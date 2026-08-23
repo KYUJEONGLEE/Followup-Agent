@@ -45,13 +45,27 @@ export class ToolRegistry {
     return this.getTool(toolName).effect;
   }
 
+  parseCallArguments(call: ToolCallRequest): Record<string, unknown> {
+    this.getTool(call.name);
+    const parsed = this.parseArguments(call.name, call.arguments);
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new ToolExecutionError(
+        TOOL_ERROR_CODES.invalidArguments,
+        `${call.name} Tool arguments는 JSON 객체여야 합니다.`,
+      );
+    }
+
+    return parsed as Record<string, unknown>;
+  }
+
   async execute(
     call: ToolCallRequest,
     executionId: string,
   ): Promise<ToolCallResult> {
     const tool = this.getTool(call.name);
 
-    const rawArguments = this.parseArguments(call.name, call.arguments);
+    const rawArguments = this.parseCallArguments(call);
     const context: ToolExecutionContext = {
       executionId,
       callId: call.callId,
