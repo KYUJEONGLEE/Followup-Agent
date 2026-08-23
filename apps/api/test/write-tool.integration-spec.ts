@@ -40,7 +40,6 @@ describe('PostgreSQL Write Tool (integration)', () => {
   let moduleRef: TestingModule | undefined;
   let database: DatabaseService | undefined;
   let repository: FollowUpTaskRepository;
-  let fixtureCreated = false;
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -87,7 +86,6 @@ describe('PostgreSQL Write Tool (integration)', () => {
           summary = EXCLUDED.summary
       `,
     );
-    fixtureCreated = true;
   });
 
   afterAll(async () => {
@@ -98,14 +96,12 @@ describe('PostgreSQL Write Tool (integration)', () => {
           [idempotencyKeys],
         );
 
-        if (fixtureCreated) {
-          await database.query(
-            `DELETE FROM consultations WHERE consultation_code = 'CONS_WRITE_OTHER'`,
-          );
-          await database.query(
-            `DELETE FROM customers WHERE customer_code = 'C_WRITE_OTHER'`,
-          );
-        }
+        await database.query(
+          `DELETE FROM consultations WHERE consultation_code = 'CONS_WRITE_OTHER'`,
+        );
+        await database.query(
+          `DELETE FROM customers WHERE customer_code = 'C_WRITE_OTHER'`,
+        );
       }
     } finally {
       await moduleRef?.close();

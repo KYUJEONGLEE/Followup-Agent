@@ -58,6 +58,14 @@ export class FollowUpTaskRepository {
   async create(
     input: CreateFollowUpTaskInput,
   ): Promise<CreateFollowUpTaskResult> {
+    const existingTask = await this.findByIdempotencyKey(
+      input.idempotencyKey,
+    );
+
+    if (existingTask) {
+      return this.resolveExistingTask(existingTask, input);
+    }
+
     const customerRows = await this.database.query<CustomerIdRow>(
       `
         SELECT id
@@ -83,14 +91,6 @@ export class FollowUpTaskRepository {
       sourceConsultationInternalId === null
     ) {
       return { status: 'consultation_not_found' };
-    }
-
-    const existingTask = await this.findByIdempotencyKey(
-      input.idempotencyKey,
-    );
-
-    if (existingTask) {
-      return this.resolveExistingTask(existingTask, input);
     }
 
     const insertedRows = await this.database.query<InsertedTaskRow>(
