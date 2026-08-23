@@ -163,8 +163,9 @@ MVP에서는 종료된 업무를 다시 여는 전이를 지원하지 않는다.
 
 ## 8. 참조 DDL
 
-다음 SQL은 AGENT-13 Migration 구현의 기준이 되는 설계 표현이다.
-아직 실행 가능한 Migration 파일은 아니며, 실제 도구를 선택한 뒤 동일한 제약조건으로 변환한다.
+다음 SQL은 AGENT-13에서 TypeORM Migration으로 반영한 스키마의 설계 표현이다.
+실행 가능한 파일은
+[`1787166000000-initial-schema.ts`](../apps/api/src/database/migrations/1787166000000-initial-schema.ts)에서 관리한다.
 
 ```sql
 CREATE TABLE customers (
