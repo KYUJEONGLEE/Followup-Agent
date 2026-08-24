@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { AgentRunResponse } from './contracts/agent-run-response';
 import { ResumeAgentRequestDto } from './contracts/resume-agent-request.dto';
 import { RunAgentRequestDto } from './contracts/run-agent-request.dto';
@@ -17,6 +18,7 @@ export class AgentController {
 
   @Post()
   @HttpCode(200)
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   run(@Body() request: RunAgentRequestDto): Promise<AgentRunResponse> {
     return this.agentService.run(request);
   }

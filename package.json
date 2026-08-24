@@ -1,6 +1,11 @@
 {
   "name": "AI Agent 실습",
   "version": "1.0.0",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.12.0 <23",
+    "pnpm": "9.x"
+  },
   "description": "",
   "main": "index.js",
   "scripts": {

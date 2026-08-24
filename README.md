@@ -57,13 +57,15 @@ Agent는 고객 정보와 상담 이력을 조회하고,
 ```text
 FollowUp-Agent
 ├─ apps/
-│  └─ api/                       # 실제 NestJS Agent Backend
+│  ├─ api/                       # 실제 NestJS Agent Backend
+│  └─ web/                       # React Agent Web Demo
 ├─ experiments/
 │  ├─ tool-calling/              # OpenAI Tool Calling 기술 검증
 │  └─ langgraph/                 # LangGraph Workflow 기술 검증
 ├─ docs/
 │  ├─ domain-model.md            # 도메인 관계와 PostgreSQL 스키마 설계
 │  └─ technical-decisions/       # 기술 검증 결과와 결정 기록
+├─ render.yaml                   # Render 공개 데모 Blueprint
 ├─ package.json
 └─ pnpm-workspace.yaml
 ```
@@ -218,6 +220,16 @@ Invoke-RestMethod http://localhost:3000/health
 현재 Health API는 NestJS 프로세스가 HTTP 요청을 처리할 수 있는지만 확인합니다.
 PostgreSQL, OpenAI, LangGraph와 같은 외부 의존성의 준비 상태는 확인하지 않습니다.
 
+## 공개 데모 배포
+
+`render.yaml`은 React Static Site, NestJS Web Service, PostgreSQL을 무료 Render
+리소스로 구성합니다. API 시작 시 빌드된 Migration과 멱등 Seed를 적용하며,
+`OPENAI_API_KEY`는 Dashboard Secret으로만 입력합니다.
+
+공개 Agent 실행은 동일 IP 기준 분당 5회로 제한하고,
+`AGENT_ALLOW_AUTO_WRITE=false`를 유지해 Write Tool은 사용자 승인 후에만 실행합니다.
+배포 절차와 무료 플랜 제약은 [공개 데모 배포 문서](./docs/deployment.md)에 정리했습니다.
+
 ## Agent API
 
 Agent 실행은 동기식 `POST /agent/runs` 요청으로 시작합니다.
@@ -315,16 +327,18 @@ pnpm tsx experiments/tool-calling/index.ts
 
 ## 현재 제한 사항
 
-- 인증·인가 및 Rate Limit 미구현
+- 인증·인가 미구현
+- 공개 Agent 실행에 단일 인스턴스 메모리 기반 분당 5회 제한만 적용
 - Health API는 DB readiness를 확인하지 않음
 - Tool 실패 재시도, timeout과 오류 응답 매핑 미구현
 - 승인 checkpoint는 프로세스 메모리에 저장되므로 서버 재시작과 다중 인스턴스를 지원하지 않음
 - `auto` 허용은 서버 전역 설정이며 사용자별 권한 체계는 아직 미구현
 - Web은 현재 실행 한 건만 표시하며 대화 Thread와 Streaming을 지원하지 않음
-- Web과 API는 로컬 Full-stack 검증 단계이며 공개 배포되지 않음
+- Render Blueprint는 준비됐지만 실제 공개 배포와 URL Smoke Test는 별도 확인 필요
 
-현재 Agent Backend MVP와 이를 직접 조작하는 최소 Web Demo까지 완료했습니다.
-다음 단계는 배포 가능한 시연 환경을 만든 뒤 RAG, 실패·timeout 정책과 GateLM 연동으로 확장합니다.
+현재 Agent Backend MVP와 이를 직접 조작하는 최소 Web Demo를 완료했고,
+Render에서 재현할 공개 데모 구성을 준비했습니다. Blueprint를 실제 적용하고 공개 URL을
+검증한 뒤 RAG, 실패·timeout 정책과 GateLM 연동으로 확장합니다.
 
 ## 문서
 
@@ -335,5 +349,6 @@ pnpm tsx experiments/tool-calling/index.ts
 - [후속 업무 Write Tool](./docs/write-tool.md)
 - [핵심 Agent 시나리오 E2E 검증](./docs/e2e-scenarios.md)
 - [Agent Web Demo 구조 및 검증](./docs/web-demo.md)
+- [공개 데모 배포](./docs/deployment.md)
 - [Tool Calling 기술 결정](./docs/technical-decisions/tool-calling.md)
 - [LangGraph 기술 결정](./docs/technical-decisions/langgraph.md)

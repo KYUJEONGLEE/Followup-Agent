@@ -214,4 +214,11 @@ describe('Agent API (e2e)', () => {
       }),
     );
   });
+
+  it('동일 IP의 Agent 실행 요청은 분당 5회로 제한한다', async () => {
+    await request(server)
+      .post('/agent/runs')
+      .send({ message: '요청 제한 확인' })
+      .expect(429);
+  });
 });
