@@ -129,18 +129,21 @@
 LangGraph 기술 검증은 MVP 구현 전에 완료했다. 실제 MVP 구현은 아래 순서로 진행하며,
 LangGraph를 NestJS Agent Backend에 연결하는 작업은 7단계에서 수행한다.
 
-| 순서 | Task |
-|---:|---|
-| 1 | NestJS Agent Backend 프로젝트 및 개발 환경 구성 |
-| 2 | 도메인 모델 및 PostgreSQL 스키마 설계 |
-| 3 | Migration / Seed 데이터 구성 |
-| 4 | Agent API 요청·응답 계약 정의 |
-| 5 | Tool 인터페이스 및 실행 구조 설계 |
-| 6 | 고객 정보 / 상담 이력 Read Tool 구현 |
-| 7 | LangGraph 기반 Agent Workflow 구현 |
-| 8 | 후속 업무 생성 Write Tool 구현 |
-| 9 | 사용자 승인 흐름 구현 |
-| 10 | 핵심 시나리오 E2E 검증 |
+| 순서 | Task | 상태 |
+|---:|---|---|
+| 1 | NestJS Agent Backend 프로젝트 및 개발 환경 구성 | 완료 |
+| 2 | 도메인 모델 및 PostgreSQL 스키마 설계 | 완료 |
+| 3 | Migration / Seed 데이터 구성 | 완료 |
+| 4 | Agent API 요청·응답 계약 정의 | 완료 |
+| 5 | Tool 인터페이스 및 실행 구조 설계 | 완료 |
+| 6 | 고객 정보 / 상담 이력 Read Tool 구현 | 완료 |
+| 7 | LangGraph 기반 Agent Workflow 구현 | 완료 |
+| 8 | 후속 업무 생성 Write Tool 구현 | 완료 |
+| 9 | 사용자 승인 흐름 구현 | 완료 |
+| 10 | 핵심 시나리오 E2E 검증 | 완료 |
+
+10단계 완료는 Agent Backend MVP의 기본 Read/Write·승인 흐름이 완성됐다는 의미다.
+Project Brief 전체 범위의 RAG, 실패 복구와 GateLM 연동은 이후 단계로 유지한다.
 
 ### 7단계 Agent Workflow 구현 범위
 

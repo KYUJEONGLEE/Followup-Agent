@@ -9,7 +9,7 @@
 OpenAI Tool Calling과 LangGraph Workflow 기술 검증을 완료하고,
 LangGraph를 MVP의 Agent Workflow Orchestration Layer로 채택했습니다.
 
-현재는 NestJS 기반 Agent Backend MVP를 단계별로 구현하고 있습니다.
+NestJS 기반 Agent Backend MVP의 10단계 구현과 핵심 시나리오 E2E 검증을 완료했습니다.
 `experiments`는 기술 검증 코드이며, 실제 MVP Backend는 `apps/api`에 구성합니다.
 
 NestJS 개발 환경과 Backend 실행 기반을 구성했으며,
@@ -23,6 +23,8 @@ LangGraph Workflow와 Agent HTTP API를 연결해 실제 LLM이 Read Tool을 선
 후속 업무 Write Tool과 DB 멱등성 처리를 구현했으며,
 Write Tool 실행 전 사용자 승인을 요청하거나 서버가 허용한 `auto` 정책으로
 즉시 실행하는 LangGraph 중단·재개 Workflow를 연결했습니다.
+Scripted LLM과 실제 PostgreSQL을 사용한 E2E에서 Tool 미사용, 다단계 Read,
+승인 Write, 거절, 미존재 고객과 중복 승인 시나리오를 검증했습니다.
 
 ## 프로젝트 목표
 
@@ -225,9 +227,9 @@ Invoke-RestMethod `
 |---|---|
 | `pnpm api:lint` | API와 테스트 코드의 ESLint 검사 |
 | `pnpm api:build` | TypeScript strict 검사 및 NestJS build |
-| `pnpm test` | 환경변수와 Health Controller 단위 테스트 |
-| `pnpm test:e2e` | Health API HTTP E2E 테스트 |
-| `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Read/Write Tool 및 승인 Workflow 통합 테스트 |
+| `pnpm test` | 환경변수, Tool Registry와 Agent Workflow 단위 테스트 |
+| `pnpm test:e2e` | 외부 의존성을 대체한 Health/Agent API E2E 테스트 |
+| `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Tool, 승인 Workflow와 핵심 API E2E 테스트 |
 | `pnpm agent:verify` | 실제 PostgreSQL과 OpenAI를 사용하는 Agent Workflow 검증 |
 
 전체 검증은 다음 순서로 실행합니다.
@@ -285,8 +287,8 @@ pnpm tsx experiments/tool-calling/index.ts
 - 승인 checkpoint는 프로세스 메모리에 저장되므로 서버 재시작과 다중 인스턴스를 지원하지 않음
 - `auto` 허용은 서버 전역 설정이며 사용자별 권한 체계는 아직 미구현
 
-현재 Read/Write Agent Workflow와 사용자 승인·거절·중복 재개까지 구현했으며,
-다음 단계에서는 핵심 시나리오 E2E와 운영 경계를 정리합니다.
+현재 Agent Backend MVP의 Read/Write Workflow, 사용자 승인과 핵심 E2E까지 완료했습니다.
+다음 단계는 Project Brief의 후속 범위인 RAG, 실패·timeout 정책과 GateLM 연동입니다.
 
 ## 문서
 
@@ -295,5 +297,6 @@ pnpm tsx experiments/tool-calling/index.ts
 - [Agent API 요청·응답 계약](./docs/api-contract.md)
 - [Tool 인터페이스 및 실행 구조](./docs/tool-execution.md)
 - [후속 업무 Write Tool](./docs/write-tool.md)
+- [핵심 Agent 시나리오 E2E 검증](./docs/e2e-scenarios.md)
 - [Tool Calling 기술 결정](./docs/technical-decisions/tool-calling.md)
 - [LangGraph 기술 결정](./docs/technical-decisions/langgraph.md)
