@@ -10,7 +10,8 @@ OpenAI Tool Calling과 LangGraph Workflow 기술 검증을 완료하고,
 LangGraph를 MVP의 Agent Workflow Orchestration Layer로 채택했습니다.
 
 NestJS 기반 Agent Backend MVP의 10단계 구현과 핵심 시나리오 E2E 검증을 완료했습니다.
-`experiments`는 기술 검증 코드이며, 실제 MVP Backend는 `apps/api`에 구성합니다.
+`experiments`는 기술 검증 코드이며, 실제 MVP Backend는 `apps/api`, Web Demo는
+`apps/web`에 구성합니다.
 
 NestJS 개발 환경과 Backend 실행 기반을 구성했으며,
 Customer, Consultation, FollowUpTask 도메인과 PostgreSQL 스키마 설계를 완료했습니다.
@@ -25,6 +26,10 @@ Write Tool 실행 전 사용자 승인을 요청하거나 서버가 허용한 `a
 즉시 실행하는 LangGraph 중단·재개 Workflow를 연결했습니다.
 Scripted LLM과 실제 PostgreSQL을 사용한 E2E에서 Tool 미사용, 다단계 Read,
 승인 Write, 거절, 미존재 고객과 중복 승인 시나리오를 검증했습니다.
+React Web Demo에서 자연어 요청, Markdown 답변, 실행 Trace와 Write Tool
+승인·거절 흐름을 브라우저로 확인할 수 있습니다.
+
+![FollowUp Agent Web Demo](./docs/agent-web-demo.png)
 
 ## 프로젝트 목표
 
@@ -81,7 +86,7 @@ FollowUp-Agent
 pnpm install
 ```
 
-pnpm Workspace가 루트의 기술 검증 패키지와 `apps/api` 패키지의 의존성을 함께 설치합니다.
+pnpm Workspace가 루트 기술 검증 패키지와 `apps/api`, `apps/web`의 의존성을 함께 설치합니다.
 
 ## 환경변수
 
@@ -171,6 +176,29 @@ pnpm --filter @followup-agent/api start:prod
 `start:prod`는 빌드 결과를 실행하는 명령이며,
 프로덕션 배포나 운영 인프라 구성이 완료됐다는 의미는 아닙니다.
 
+## Web Demo 실행
+
+API와 PostgreSQL을 먼저 실행한 뒤 새 PowerShell에서 Web 개발 서버를 시작합니다.
+
+```powershell
+pnpm web:dev
+```
+
+브라우저에서 `http://localhost:5173`을 엽니다. 개발 서버는 `/api` 요청을
+`http://localhost:3000`으로 Proxy하므로 로컬에서는 별도 Web 환경변수가 필요하지 않습니다.
+
+API를 다른 주소에서 실행한다면 `apps/web/.env.example`을 복사하고
+`VITE_API_BASE_URL`에 해당 API 주소를 설정합니다. API도 Web Origin을
+`CORS_ORIGIN`으로 허용해야 합니다.
+
+Web Demo에서 다음 기능을 확인할 수 있습니다.
+
+- Tool 미사용, 고객·상담 조회와 후속 업무 생성 예시 요청
+- Node, Tool arguments와 승인 결정을 보여주는 실행 Trace
+- `required`와 서버 허용 기반 `auto` Write 실행 정책 선택
+- Write Tool arguments 확인 후 승인 또는 거절
+- Markdown 최종 답변과 실행 ID 표시
+
 ## Health API
 
 Backend 실행 후 다음 요청으로 프로세스 상태를 확인합니다.
@@ -227,6 +255,9 @@ Invoke-RestMethod `
 |---|---|
 | `pnpm api:lint` | API와 테스트 코드의 ESLint 검사 |
 | `pnpm api:build` | TypeScript strict 검사 및 NestJS build |
+| `pnpm web:lint` | Web TypeScript와 React ESLint 검사 |
+| `pnpm web:build` | Web TypeScript 검사 및 Vite production build |
+| `pnpm web:test` | API Client, 답변, 승인과 오류 UI 단위 테스트 |
 | `pnpm test` | 환경변수, Tool Registry와 Agent Workflow 단위 테스트 |
 | `pnpm test:e2e` | 외부 의존성을 대체한 Health/Agent API E2E 테스트 |
 | `pnpm test:integration` | 실제 PostgreSQL을 사용하는 Tool, 승인 Workflow와 핵심 API E2E 테스트 |
@@ -237,6 +268,9 @@ Invoke-RestMethod `
 ```powershell
 pnpm api:lint
 pnpm api:build
+pnpm web:lint
+pnpm web:build
+pnpm web:test
 pnpm test
 pnpm test:e2e
 pnpm test:integration
@@ -286,9 +320,11 @@ pnpm tsx experiments/tool-calling/index.ts
 - Tool 실패 재시도, timeout과 오류 응답 매핑 미구현
 - 승인 checkpoint는 프로세스 메모리에 저장되므로 서버 재시작과 다중 인스턴스를 지원하지 않음
 - `auto` 허용은 서버 전역 설정이며 사용자별 권한 체계는 아직 미구현
+- Web은 현재 실행 한 건만 표시하며 대화 Thread와 Streaming을 지원하지 않음
+- Web과 API는 로컬 Full-stack 검증 단계이며 공개 배포되지 않음
 
-현재 Agent Backend MVP의 Read/Write Workflow, 사용자 승인과 핵심 E2E까지 완료했습니다.
-다음 단계는 Project Brief의 후속 범위인 RAG, 실패·timeout 정책과 GateLM 연동입니다.
+현재 Agent Backend MVP와 이를 직접 조작하는 최소 Web Demo까지 완료했습니다.
+다음 단계는 배포 가능한 시연 환경을 만든 뒤 RAG, 실패·timeout 정책과 GateLM 연동으로 확장합니다.
 
 ## 문서
 
@@ -298,5 +334,6 @@ pnpm tsx experiments/tool-calling/index.ts
 - [Tool 인터페이스 및 실행 구조](./docs/tool-execution.md)
 - [후속 업무 Write Tool](./docs/write-tool.md)
 - [핵심 Agent 시나리오 E2E 검증](./docs/e2e-scenarios.md)
+- [Agent Web Demo 구조 및 검증](./docs/web-demo.md)
 - [Tool Calling 기술 결정](./docs/technical-decisions/tool-calling.md)
 - [LangGraph 기술 결정](./docs/technical-decisions/langgraph.md)
