@@ -17,6 +17,9 @@ import { DatabaseService } from '../src/database/database.service';
 
 const E2E_TITLE_PREFIX = '[AGENT-20 E2E]';
 const approvedTaskTitle = `${E2E_TITLE_PREFIX} 승인 업무`;
+const rejectedTaskTitle = `${E2E_TITLE_PREFIX} 거절 업무`;
+const missingCustomerTaskTitle = `${E2E_TITLE_PREFIX} 미존재 고객 업무`;
+const duplicateTaskTitle = `${E2E_TITLE_PREFIX} 중복 승인 업무`;
 
 interface FollowUpTaskRow {
   title: string;
@@ -42,6 +45,38 @@ class CoreScenarioLlmClient implements AgentLlmClient {
         return Promise.resolve(this.createReadScenarioResponse(request));
       case '김민수 고객을 조회하고 상담을 확인한 뒤 후속 업무를 만들어줘.':
         return Promise.resolve(this.createApprovedWriteResponse(request));
+      case '김민수 고객의 후속 업무를 제안하고 승인을 기다려줘.':
+        return Promise.resolve(
+          this.createSingleWriteResponse(request, {
+            scenario: 'reject',
+            customerId: 'C001',
+            consultationId: 'CONS001',
+            title: rejectedTaskTitle,
+            finalAnswer: '이 응답은 거절 경로에서 생성되면 안 됩니다.',
+          }),
+        );
+      case 'C999 고객에게 후속 업무를 만들어줘.':
+        return Promise.resolve(
+          this.createSingleWriteResponse(request, {
+            scenario: 'missing',
+            customerId: 'C999',
+            consultationId: null,
+            title: missingCustomerTaskTitle,
+            finalAnswer: 'C999 활성 고객을 찾을 수 없어 업무를 생성하지 않았습니다.',
+            expectedToolOutput: 'not_found',
+          }),
+        );
+      case '김민수 고객에게 중복 없이 후속 업무를 만들어줘.':
+        return Promise.resolve(
+          this.createSingleWriteResponse(request, {
+            scenario: 'duplicate',
+            customerId: 'C001',
+            consultationId: 'CONS001',
+            title: duplicateTaskTitle,
+            finalAnswer: '중복 없이 후속 업무를 생성했습니다.',
+            expectedToolOutput: duplicateTaskTitle,
+          }),
+        );
       default:
         throw new Error(`정의하지 않은 E2E 요청입니다: ${request.userMessage}`);
     }
@@ -118,6 +153,55 @@ class CoreScenarioLlmClient implements AgentLlmClient {
     }
 
     throw new Error('Write E2E 시나리오의 이전 응답 ID가 올바르지 않습니다.');
+  }
+
+  private createSingleWriteResponse(
+    request: AgentLlmRequest,
+    scenario: {
+      scenario: 'reject' | 'missing' | 'duplicate';
+      customerId: string;
+      consultationId: string | null;
+      title: string;
+      finalAnswer: string;
+      expectedToolOutput?: string;
+    },
+  ): AgentLlmResult {
+    const responseId = `e2e-${scenario.scenario}-create-task`;
+
+    if (!request.previousResponseId) {
+      return {
+        type: 'tool_call',
+        responseId,
+        toolCall: {
+          callId: `call-${responseId}`,
+          name: 'create_follow_up_task',
+          arguments: JSON.stringify({
+            customer_id: scenario.customerId,
+            source_consultation_id: scenario.consultationId,
+            title: scenario.title,
+            description: 'AGENT-20 예외 및 중복 E2E 검증',
+            due_at: null,
+          }),
+        },
+      };
+    }
+
+    if (
+      request.previousResponseId === responseId &&
+      scenario.expectedToolOutput
+    ) {
+      this.requireToolOutput(request, scenario.expectedToolOutput);
+
+      return {
+        type: 'final_answer',
+        responseId: `e2e-${scenario.scenario}-final`,
+        answer: scenario.finalAnswer,
+      };
+    }
+
+    throw new Error(
+      `${scenario.scenario} E2E 시나리오의 이전 응답 ID가 올바르지 않습니다.`,
+    );
   }
 
   private getCustomerCall(scenario: 'read' | 'write'): AgentLlmResult {
@@ -320,6 +404,105 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
     });
   });
 
+  it('사용자가 거절하면 Write Tool 실행과 DB 변경 없이 종료한다', async () => {
+    const beforeCount = await countScenarioTasks();
+    const pendingResponse = await request(server)
+      .post('/agent/runs')
+      .send({
+        message: '김민수 고객의 후속 업무를 제안하고 승인을 기다려줘.',
+      })
+      .expect(200);
+    const pendingBody = toAgentRunResponse(pendingResponse);
+
+    expect(pendingBody.status).toBe('awaiting_approval');
+    await expect(findTask(rejectedTaskTitle)).resolves.toBeUndefined();
+
+    const rejectedResponse = await request(server)
+      .post(`/agent/runs/${pendingBody.executionId}/approval`)
+      .send({ decision: 'reject' })
+      .expect(200);
+    const rejectedBody = toAgentRunResponse(rejectedResponse);
+
+    expect(rejectedBody.status).toBe('rejected');
+    expect(rejectedBody.trace.map(traceLabel)).toEqual([
+      'node:llm',
+      'approval:requested:create_follow_up_task',
+      'approval:rejected:create_follow_up_task',
+    ]);
+    expect(
+      rejectedBody.trace.some(
+        (trace) =>
+          trace.type === 'tool' && trace.name === 'create_follow_up_task',
+      ),
+    ).toBe(false);
+    await expect(findTask(rejectedTaskTitle)).resolves.toBeUndefined();
+    await expect(countScenarioTasks()).resolves.toBe(beforeCount);
+  });
+
+  it('미존재 고객 C999는 승인 후에도 업무를 저장하지 않는다', async () => {
+    const beforeCount = await countScenarioTasks();
+    const pendingResponse = await request(server)
+      .post('/agent/runs')
+      .send({ message: 'C999 고객에게 후속 업무를 만들어줘.' })
+      .expect(200);
+    const pendingBody = toAgentRunResponse(pendingResponse);
+
+    expect(pendingBody.status).toBe('awaiting_approval');
+    expect(pendingBody.approval).toEqual(
+      expect.objectContaining({
+        arguments: expect.objectContaining({ customer_id: 'C999' }),
+      }),
+    );
+
+    const completedResponse = await request(server)
+      .post(`/agent/runs/${pendingBody.executionId}/approval`)
+      .send({ decision: 'approve' })
+      .expect(200);
+    const completedBody = toAgentRunResponse(completedResponse);
+
+    expect(completedBody.status).toBe('completed');
+    expect(completedBody.answer).toContain('찾을 수 없어');
+    expect(completedBody.trace.map(traceLabel)).toEqual([
+      'node:llm',
+      'approval:requested:create_follow_up_task',
+      'approval:approved:create_follow_up_task',
+      'tool:create_follow_up_task',
+      'node:llm',
+    ]);
+    await expect(findTask(missingCustomerTaskTitle)).resolves.toBeUndefined();
+    await expect(countScenarioTasks()).resolves.toBe(beforeCount);
+  });
+
+  it('같은 실행을 다시 승인해도 응답과 DB 한 건을 유지한다', async () => {
+    const pendingResponse = await request(server)
+      .post('/agent/runs')
+      .send({ message: '김민수 고객에게 중복 없이 후속 업무를 만들어줘.' })
+      .expect(200);
+    const pendingBody = toAgentRunResponse(pendingResponse);
+
+    expect(pendingBody.status).toBe('awaiting_approval');
+
+    const firstApprovalResponse = await request(server)
+      .post(`/agent/runs/${pendingBody.executionId}/approval`)
+      .send({ decision: 'approve' })
+      .expect(200);
+    const firstApprovalBody = toAgentRunResponse(firstApprovalResponse);
+
+    expect(firstApprovalBody.status).toBe('completed');
+    await expect(countTasksByTitle(duplicateTaskTitle)).resolves.toBe(1);
+
+    const duplicateApprovalResponse = await request(server)
+      .post(`/agent/runs/${pendingBody.executionId}/approval`)
+      .send({ decision: 'approve' })
+      .expect(200);
+    const duplicateApprovalBody = toAgentRunResponse(
+      duplicateApprovalResponse,
+    );
+
+    expect(duplicateApprovalBody).toEqual(firstApprovalBody);
+    await expect(countTasksByTitle(duplicateTaskTitle)).resolves.toBe(1);
+  });
+
   async function countScenarioTasks(): Promise<number> {
     const initializedDatabase = requireDatabase(database);
     const rows = await initializedDatabase.query<CountRow>(
@@ -349,6 +532,16 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
     );
 
     return rows[0];
+  }
+
+  async function countTasksByTitle(title: string): Promise<number> {
+    const initializedDatabase = requireDatabase(database);
+    const rows = await initializedDatabase.query<CountRow>(
+      `SELECT COUNT(*)::text AS count FROM follow_up_tasks WHERE title = $1`,
+      [title],
+    );
+
+    return Number(rows[0]?.count ?? 0);
   }
 });
 
