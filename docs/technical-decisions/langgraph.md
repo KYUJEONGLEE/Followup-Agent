@@ -307,3 +307,35 @@ MVP checkpointer는 프로세스 메모리의 `MemorySaver`다.
 서버 재시작 복구나 여러 인스턴스 간 재개를 보장하지 않는다.
 운영 단계에서는 PostgreSQL 또는 Redis 기반 영속 checkpointer와
 사용자별 승인 권한, 감사 로그를 추가해야 한다.
+
+## 9. 핵심 시나리오 E2E 결과 (AGENT-20)
+
+AGENT-17~19의 기능을 개별 테스트로만 확인하지 않고
+HTTP API에서 실제 PostgreSQL까지 연결해 최종 검증했다.
+
+```text
+AgentController
+→ AgentService
+→ LangGraph
+→ Tool Registry
+→ PostgreSQL
+```
+
+OpenAI 호출은 결과가 결정적인 Scripted LLM으로 대체했다.
+Scripted LLM은 `get_customer` 결과에 `C001`이 있어야
+`get_consultations(customer_id="C001")`을 반환하고,
+상담 결과에 `CONS001`이 있어야 Write 호출 또는 최종 답변으로 진행한다.
+
+확인한 결과는 다음과 같다.
+
+- Tool 미사용 요청은 `llm → END`로 종료되고 DB를 변경하지 않았다.
+- 다단계 Read는 `get_customer → get_consultations` 순서와 arguments가 Trace에 남았다.
+- Write는 승인 전 0건, 승인 후 `C001/CONS001`에 연결된 1건이 생성됐다.
+- 거절 시 Write Tool Trace가 없었고 DB도 변경되지 않았다.
+- 미존재 고객 C999는 승인 후에도 `not_found`로 종료되고 DB 0건을 유지했다.
+- 같은 실행을 다시 승인해도 첫 응답과 DB 1건을 유지했다.
+- 모든 테스트 종료 후 시나리오용 임시 업무는 0건이었다.
+
+이 결과는 Backend orchestration과 데이터 일관성의 E2E 증거다.
+실제 모델의 비결정적 Tool 선택 품질은 별도 `pnpm agent:verify` 범위이며,
+자세한 시나리오와 실행 방법은 `docs/e2e-scenarios.md`에 기록한다.

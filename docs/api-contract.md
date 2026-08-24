@@ -212,3 +212,4 @@ Tool 결과로 표현하고 Agent가 최종 답변에서 안내한다.
 - Workflow: `apps/api/src/agent/agent-workflow.service.ts`
 - API E2E: `apps/api/test/agent.e2e-spec.ts`
 - PostgreSQL 승인 통합 테스트: `apps/api/test/approval-workflow.integration-spec.ts`
+- 핵심 API→PostgreSQL E2E: `apps/api/test/agent-core-scenarios.integration-spec.ts`
