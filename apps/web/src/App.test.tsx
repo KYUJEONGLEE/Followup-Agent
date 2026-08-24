@@ -25,7 +25,7 @@ describe('App', () => {
     const fetchMock = mockJsonResponse({
       executionId,
       status: 'completed',
-      answer: '김민수 고객은 active 상태이며 최근 상담은 2건입니다.',
+      answer: '**김민수 고객**은 active 상태이며 최근 상담은 2건입니다.',
       approval: null,
       writeApprovalMode: 'required',
       trace: [
@@ -45,9 +45,10 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: /Agent 실행/ }));
 
     expect(
-      await screen.findByText(
-        '김민수 고객은 active 상태이며 최근 상담은 2건입니다.',
-      ),
+      await screen.findByText('김민수 고객', { selector: 'strong' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/active 상태이며 최근 상담은 2건입니다/),
     ).toBeInTheDocument();
     expect(screen.getByText('get_customer')).toBeInTheDocument();
     expect(screen.getByText(/"name": "김민수"/)).toBeInTheDocument();

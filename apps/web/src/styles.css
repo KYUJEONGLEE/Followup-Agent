@@ -614,7 +614,29 @@ textarea:focus {
   color: #33415c;
   font-size: 15px;
   line-height: 1.9;
-  white-space: pre-wrap;
+}
+
+.answer-copy > :first-child {
+  margin-top: 0;
+}
+
+.answer-copy > :last-child {
+  margin-bottom: 0;
+}
+
+.answer-copy p,
+.answer-copy ul,
+.answer-copy ol {
+  margin: 0.75em 0;
+}
+
+.answer-copy ul,
+.answer-copy ol {
+  padding-left: 1.4em;
+}
+
+.answer-copy strong {
+  color: var(--ink);
 }
 
 .execution-meta {

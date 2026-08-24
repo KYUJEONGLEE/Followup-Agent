@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import Markdown from 'react-markdown';
 import {
   resumeAgent,
   runAgent,
@@ -248,7 +249,9 @@ export function App() {
                       </span>
                     )}
                   </div>
-                  <p className="answer-copy">{response.answer}</p>
+                  <div className="answer-copy">
+                    <Markdown>{response.answer}</Markdown>
+                  </div>
                   <div className="execution-meta">
                     <span>Execution ID</span>
                     <code>{response.executionId}</code>
