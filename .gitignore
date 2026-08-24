@@ -1,6 +1,8 @@
 node_modules/
 dist/
 *.tsbuildinfo
+.playwright-cli/
+output/
 
 .env
 .env.*

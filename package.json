@@ -20,6 +20,10 @@
     "db:seed": "pnpm --filter @followup-agent/api database:seed",
     "db:up": "docker compose up -d --wait postgres",
     "db:verify": "pnpm --filter @followup-agent/api database:verify",
+    "web:build": "pnpm --filter @followup-agent/web build",
+    "web:dev": "pnpm --filter @followup-agent/web dev",
+    "web:lint": "pnpm --filter @followup-agent/web lint",
+    "web:test": "pnpm --filter @followup-agent/web test",
     "test": "pnpm api:test",
     "test:e2e": "pnpm api:test:e2e",
     "test:integration": "pnpm api:test:integration"
