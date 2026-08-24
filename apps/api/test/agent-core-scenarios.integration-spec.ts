@@ -23,6 +23,7 @@ const duplicateTaskTitle = `${E2E_TITLE_PREFIX} 중복 승인 업무`;
 
 interface FollowUpTaskRow {
   title: string;
+  description: string | null;
   status: string;
   customer_code: string;
   consultation_code: string | null;
@@ -398,6 +399,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
     ]);
     await expect(findTask(approvedTaskTitle)).resolves.toEqual({
       title: approvedTaskTitle,
+      description: '상담 결과에 따른 생활 습관 확인',
       status: 'pending',
       customer_code: 'C001',
       consultation_code: 'CONS001',
@@ -519,6 +521,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
       `
         SELECT
           task.title,
+          task.description,
           task.status,
           customer.customer_code,
           consultation.consultation_code
