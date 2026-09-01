@@ -32,12 +32,16 @@ Web과 API URL은 Blueprint가 생성한 `RENDER_EXTERNAL_URL`을 서로 참조�
 API 배포는 다음 순서로 실행된다.
 
 ```text
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile --prod=false
 → API build
 → 빌드된 Migration 실행
 → 멱등 Seed 실행
 → NestJS API 시작
 ```
+
+API Build에는 `NODE_ENV=production`이 적용되지만 Nest CLI와 TypeScript 같은 빌드 도구는
+devDependencies에 있다. 따라서 Render Build 명령은 `--prod=false`를 명시해 빌드 도구까지
+설치하며, 실제 실행 단계에서는 빌드된 JavaScript만 사용한다.
 
 `start:deploy`가 배포용 Database 준비 명령을 실행한 뒤 `dist/main.js`를 시작한다.
 Database 연결은 한 번에 10초까지만 기다리고, 최초 리소스 준비 지연과 같은 일시적 실패는
