@@ -7,11 +7,11 @@ import type { AgentRunResponse } from './api/agent';
 const executionId = '8a697cff-b2bd-42ab-a3d7-13a4cd91f83d';
 
 function mockJsonResponse(body: AgentRunResponse, ok = true, status = 200) {
-  return vi.fn().mockResolvedValue({
+  return vi.fn<typeof fetch>().mockResolvedValue({
     ok,
     status,
     json: vi.fn().mockResolvedValue(body),
-  });
+  } as unknown as Response);
 }
 
 afterEach(() => {
@@ -52,17 +52,19 @@ describe('App', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('get_customer')).toBeInTheDocument();
     expect(screen.getByText(/"name": "김민수"/)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/agent/runs',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: '김민수 고객의 기본 정보와 최근 상담 내용을 같이 알려줘.',
-          writeApprovalMode: 'required',
-        }),
-      },
-    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0];
+
+    expect(requestUrl).toBe('/api/agent/runs');
+    expect(requestInit).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: '김민수 고객의 기본 정보와 최근 상담 내용을 같이 알려줘.',
+        writeApprovalMode: 'required',
+      }),
+    });
+    expect(requestInit?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('승인 대기 요청을 승인해 Workflow를 재개한다', async () => {
@@ -108,17 +110,17 @@ describe('App', () => {
       ],
     };
     const fetchMock = vi
-      .fn()
+      .fn<typeof fetch>()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: vi.fn().mockResolvedValue(awaitingApproval),
-      })
+      } as unknown as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: vi.fn().mockResolvedValue(completed),
-      });
+      } as unknown as Response);
     vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
@@ -140,15 +142,16 @@ describe('App', () => {
     expect(
       await screen.findByText('후속 업무를 생성했습니다.'),
     ).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      `/api/agent/runs/${executionId}/approval`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision: 'approve' }),
-      },
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [approvalUrl, approvalInit] = fetchMock.mock.calls[1];
+
+    expect(approvalUrl).toBe(`/api/agent/runs/${executionId}/approval`);
+    expect(approvalInit).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision: 'approve' }),
+    });
+    expect(approvalInit?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('API 오류 메시지를 사용자에게 보여준다', async () => {

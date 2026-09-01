@@ -69,18 +69,43 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(
   /\/$/,
   '',
 );
+const apiRequestTimeoutMs = 90_000;
+const apiTimeoutMessage =
+  'API 서버가 응답하지 않습니다. 무료 데모가 기동 중일 수 있으니 잠시 후 다시 시도해 주세요.';
 
 async function requestAgent(
   path: string,
   body: Record<string, unknown>,
 ): Promise<AgentRunResponse> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  const abortController = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    abortController.abort(
+      new DOMException('요청 제한 시간 초과', 'TimeoutError'),
+    );
+  }, apiRequestTimeoutMs);
+  let response: Response;
+
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: abortController.signal,
+    });
+  } catch (error) {
+    if (
+      error instanceof DOMException &&
+      ['AbortError', 'TimeoutError'].includes(error.name)
+    ) {
+      throw new Error(apiTimeoutMessage, { cause: error });
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     let errorMessage = `요청 처리에 실패했습니다. (${response.status})`;
