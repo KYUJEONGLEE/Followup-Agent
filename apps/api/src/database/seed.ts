@@ -1,4 +1,5 @@
 import appDataSource from './data-source';
+import type { DataSource } from 'typeorm';
 
 interface CustomerIdRow {
   id: string;
@@ -26,11 +27,17 @@ const consultationSeeds = [
   },
 ] as const;
 
-async function seedDatabase(): Promise<void> {
-  await appDataSource.initialize();
+export async function seedDatabase(
+  dataSource: DataSource = appDataSource,
+): Promise<void> {
+  const managesConnection = !dataSource.isInitialized;
+
+  if (managesConnection) {
+    await dataSource.initialize();
+  }
 
   try {
-    await appDataSource.transaction(async (manager) => {
+    await dataSource.transaction(async (manager) => {
       const customerRows = await manager.query<CustomerIdRow[]>(
         `
           INSERT INTO customers (id, customer_code, name, status)
@@ -87,13 +94,18 @@ async function seedDatabase(): Promise<void> {
 
     console.log('Seed 완료: C001 고객 1건, 상담 이력 2건');
   } finally {
-    await appDataSource.destroy();
+    if (managesConnection && dataSource.isInitialized) {
+      await dataSource.destroy();
+    }
   }
 }
 
-void seedDatabase().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : '알 수 없는 오류';
+if (require.main === module) {
+  void seedDatabase().catch((error: unknown) => {
+    const message =
+      error instanceof Error ? error.message : '알 수 없는 오류';
 
-  console.error(`Seed 실패: ${message}`);
-  process.exitCode = 1;
-});
+    console.error(`Seed 실패: ${message}`);
+    process.exitCode = 1;
+  });
+}

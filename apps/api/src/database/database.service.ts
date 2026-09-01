@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
+import { databaseDriverOptions } from './database-options';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -17,6 +18,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       synchronize: false,
       migrationsRun: false,
       entities: [],
+      extra: databaseDriverOptions,
     });
   }
 

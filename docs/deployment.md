@@ -39,9 +39,12 @@ pnpm install --frozen-lockfile
 → NestJS API 시작
 ```
 
-`start:deploy`가 Migration과 Seed를 실행한 뒤 `dist/main.js`를 시작한다.
-Seed는 고객 코드와 상담 코드로 Upsert하므로 무료 인스턴스 재시작 때 다시 실행해도
-정의된 C001 데이터가 중복되지 않는다.
+`start:deploy`가 배포용 Database 준비 명령을 실행한 뒤 `dist/main.js`를 시작한다.
+Database 연결은 한 번에 10초까지만 기다리고, 최초 리소스 준비 지연과 같은 일시적 실패는
+5초 간격으로 최대 6회 재시도한다. 연결되면 한 세션에서 Migration과 Seed를 순서대로
+적용하며, 최종 실패 시 NestJS를 시작하지 않고 원인을 로그에 남긴다. Seed는 고객 코드와
+상담 코드로 Upsert하므로 무료 인스턴스 재시작 때 다시 실행해도 정의된 C001 데이터가
+중복되지 않는다.
 
 API는 Render가 주입하는 `PORT`를 사용하며 `0.0.0.0`에 바인딩한다.
 `GET /health`를 Render Health Check 경로로 사용한다.
@@ -137,4 +140,3 @@ Blueprint 필드는 [Render Blueprint 공식 명세](https://render.com/docs/blu
 - 유료 PostgreSQL, 백업과 복구 절차
 - 로그, Metric, Alert
 - Secret rotation과 배포 환경 분리
-
