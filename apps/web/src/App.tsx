@@ -33,6 +33,8 @@ const statusCopy = {
   rejected: { label: '실행 거절', tone: 'neutral' },
 } as const;
 
+const environmentLabel = import.meta.env.PROD ? 'Public demo' : 'Local demo';
+
 export function App() {
   const [message, setMessage] = useState('');
   const [approvalMode, setApprovalMode] =
@@ -103,7 +105,7 @@ export function App() {
         </a>
         <div className="environment-badge">
           <span aria-hidden="true" />
-          Local demo
+          {environmentLabel}
         </div>
       </header>
 
