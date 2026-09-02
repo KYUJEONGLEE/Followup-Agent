@@ -83,10 +83,8 @@ async function requestAgent(
       new DOMException('요청 제한 시간 초과', 'TimeoutError'),
     );
   }, apiRequestTimeoutMs);
-  let response: Response;
-
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,11 +92,32 @@ async function requestAgent(
       body: JSON.stringify(body),
       signal: abortController.signal,
     });
+
+    if (!response.ok) {
+      let errorMessage = `요청 처리에 실패했습니다. (${response.status})`;
+
+      try {
+        const errorBody = (await response.json()) as ApiErrorBody;
+
+        if (Array.isArray(errorBody.message)) {
+          errorMessage = errorBody.message.join(' ');
+        } else if (errorBody.message) {
+          errorMessage = errorBody.message;
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          throw error;
+        }
+        // JSON 오류 본문이 아니면 상태 코드 기반 메시지를 유지한다.
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    // 헤더 수신뿐 아니라 본문을 모두 읽을 때까지 timeout을 유지한다.
+    return (await response.json()) as AgentRunResponse;
   } catch (error) {
-    if (
-      error instanceof DOMException &&
-      ['AbortError', 'TimeoutError'].includes(error.name)
-    ) {
+    if (abortController.signal.aborted) {
       throw new Error(apiTimeoutMessage, { cause: error });
     }
 
@@ -106,26 +125,6 @@ async function requestAgent(
   } finally {
     window.clearTimeout(timeoutId);
   }
-
-  if (!response.ok) {
-    let errorMessage = `요청 처리에 실패했습니다. (${response.status})`;
-
-    try {
-      const errorBody = (await response.json()) as ApiErrorBody;
-
-      if (Array.isArray(errorBody.message)) {
-        errorMessage = errorBody.message.join(' ');
-      } else if (errorBody.message) {
-        errorMessage = errorBody.message;
-      }
-    } catch {
-      // JSON 오류 본문이 아니면 상태 코드 기반 메시지를 유지한다.
-    }
-
-    throw new Error(errorMessage);
-  }
-
-  return (await response.json()) as AgentRunResponse;
 }
 
 export function runAgent(
