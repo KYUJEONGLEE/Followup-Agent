@@ -361,6 +361,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
 
     expect(pendingBody.status).toBe('awaiting_approval');
     expect(pendingBody.approval).toEqual({
+      id: expect.any(String),
       toolName: 'create_follow_up_task',
       arguments: expect.objectContaining({
         customer_id: 'C001',
@@ -380,7 +381,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
 
     const approvedResponse = await request(server)
       .post(`/agent/runs/${pendingBody.executionId}/approval`)
-      .send({ decision: 'approve' })
+      .send({ approvalId: pendingBody.approval?.id, decision: 'approve' })
       .expect(200);
     const approvedBody = toAgentRunResponse(approvedResponse);
 
@@ -421,7 +422,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
 
     const rejectedResponse = await request(server)
       .post(`/agent/runs/${pendingBody.executionId}/approval`)
-      .send({ decision: 'reject' })
+      .send({ approvalId: pendingBody.approval?.id, decision: 'reject' })
       .expect(200);
     const rejectedBody = toAgentRunResponse(rejectedResponse);
 
@@ -458,7 +459,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
 
     const completedResponse = await request(server)
       .post(`/agent/runs/${pendingBody.executionId}/approval`)
-      .send({ decision: 'approve' })
+      .send({ approvalId: pendingBody.approval?.id, decision: 'approve' })
       .expect(200);
     const completedBody = toAgentRunResponse(completedResponse);
 
@@ -486,7 +487,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
 
     const firstApprovalResponse = await request(server)
       .post(`/agent/runs/${pendingBody.executionId}/approval`)
-      .send({ decision: 'approve' })
+      .send({ approvalId: pendingBody.approval?.id, decision: 'approve' })
       .expect(200);
     const firstApprovalBody = toAgentRunResponse(firstApprovalResponse);
 
@@ -495,7 +496,7 @@ describe('핵심 Agent 시나리오 (API → PostgreSQL)', () => {
 
     const duplicateApprovalResponse = await request(server)
       .post(`/agent/runs/${pendingBody.executionId}/approval`)
-      .send({ decision: 'approve' })
+      .send({ approvalId: pendingBody.approval?.id, decision: 'approve' })
       .expect(200);
     const duplicateApprovalBody = toAgentRunResponse(
       duplicateApprovalResponse,

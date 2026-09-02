@@ -136,6 +136,7 @@ describe('Agent API (e2e)', () => {
       status: 'awaiting_approval',
       answer: null,
       approval: {
+        id: expect.any(String),
         toolName: 'create_follow_up_task',
         arguments: writeArguments,
       },
@@ -149,12 +150,13 @@ describe('Agent API (e2e)', () => {
     });
     expect(writeInputs).toHaveLength(0);
 
-    const executionId = (
-      pendingResponse.body as unknown as { executionId: string }
-    ).executionId;
+    const { executionId, approval } = pendingResponse.body as {
+      executionId: string;
+      approval: { id: string };
+    };
     const approvedResponse = await request(server)
       .post(`/agent/runs/${executionId}/approval`)
-      .send({ decision: 'approve' })
+      .send({ approvalId: approval.id, decision: 'approve' })
       .expect(200);
 
     expect(approvedResponse.body).toEqual(
@@ -168,7 +170,7 @@ describe('Agent API (e2e)', () => {
 
     await request(server)
       .post(`/agent/runs/${executionId}/approval`)
-      .send({ decision: 'approve' })
+      .send({ approvalId: approval.id, decision: 'approve' })
       .expect(200);
 
     expect(writeInputs).toHaveLength(1);
@@ -180,13 +182,14 @@ describe('Agent API (e2e)', () => {
       .post('/agent/runs')
       .send({ message: '거절할 후속 업무를 만들어줘.' })
       .expect(200);
-    const executionId = (
-      pendingResponse.body as unknown as { executionId: string }
-    ).executionId;
+    const { executionId, approval } = pendingResponse.body as {
+      executionId: string;
+      approval: { id: string };
+    };
 
     const rejectedResponse = await request(server)
       .post(`/agent/runs/${executionId}/approval`)
-      .send({ decision: 'reject' })
+      .send({ approvalId: approval.id, decision: 'reject' })
       .expect(200);
 
     expect(rejectedResponse.body).toEqual(

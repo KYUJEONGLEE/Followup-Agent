@@ -101,6 +101,7 @@ LangGraph checkpoint를 저장한 뒤 다음 응답을 반환한다.
   "status": "awaiting_approval",
   "answer": null,
   "approval": {
+    "id": "5225e953-e55c-4e9c-9507-65d9d1d860b2",
     "toolName": "create_follow_up_task",
     "arguments": {
       "customer_id": "C001",
@@ -140,22 +141,30 @@ Content-Type: application/json
 
 ```json
 {
+  "approvalId": "5225e953-e55c-4e9c-9507-65d9d1d860b2",
   "decision": "approve"
 }
 ```
 
 | 필드 | 타입 | 의미 |
 |---|---|---|
+| `approvalId` | UUID v4 | 사용자가 확인한 응답의 `approval.id`, 필수 |
 | `decision` | `approve \| reject` | 보류된 Write Tool 실행 여부 |
 
 ### 승인
 
 `approve`는 checkpoint에서 보류된 Write 호출을 재개한다.
-Tool 결과를 다시 LLM에 전달한 뒤 `completed` 응답을 반환한다.
+Tool 결과를 다시 LLM에 전달한 뒤 최종 답변이면 `completed`를 반환한다.
+LLM이 다음 Write를 요청하면 새로운 `approval.id`와 함께 다시 `awaiting_approval`로 대기한다.
 
-같은 `executionId`와 같은 결정을 다시 보내면 정상 종료된 실행에 한해 완료된 응답을 반환한다.
-동시에 들어온 같은 결정은 한 프로세스 안에서 진행 중인 재개 작업을 공유하므로
+같은 `executionId`, `approvalId`, 결정을 다시 보내면 정상 종료된 실행에 한해 완료된 응답을 반환한다.
+동시에 들어온 같은 승인 ID와 결정은 한 프로세스 안에서 진행 중인 재개 작업을 공유하므로
 Write Tool과 LLM을 중복 실행하지 않는다.
+
+이전 승인 ID를 재전송해도 다음 Write를 승인할 수 없다. 현재 checkpoint의 승인 ID와
+일치하지 않는 요청은 `409 Conflict`로 거부한다. Web은 현재 승인 화면의 ID를 전송한다.
+`approvalId`가 없는 이전 클라이언트 요청은 `400 Bad Request`다. API와 Web을 함께 배포해야 한다.
+승인 ID는 확인한 작업을 구분하기 위한 값이며 사용자 인증·인가를 대신하지 않는다.
 
 승인 이후 Tool 또는 최종 LLM 호출이 실패해 Graph에 실행할 Node가 남아 있으면,
 재승인 요청은 `completed`가 아닌 `409 Conflict`로 응답한다. 이때 업무가 이미 생성됐을
@@ -194,9 +203,9 @@ Write Tool과 LLM을 중복 실행하지 않는다.
 
 | HTTP | 상황 |
 |---:|---|
-| 400 | 잘못된 UUID, decision 또는 요청 필드 |
+| 400 | 잘못된 실행 UUID, 누락·잘못된 approvalId, decision 또는 요청 필드 |
 | 404 | `executionId`에 해당하는 checkpoint 없음 |
-| 409 | 승인이 필요 없는 실행, 반대 결정 처리 중·적용됨, 또는 이전 승인 실행이 미완료인 상태에서 재승인 |
+| 409 | 승인 ID 불일치, 승인이 필요 없는 실행, 다른 승인 요청 처리 중, 반대 결정 적용됨, 또는 이전 승인 실행 미완료 |
 
 데이터 미존재는 시스템 오류가 아니다.
 Tool 결과로 표현하고 Agent가 최종 답변에서 안내한다.
@@ -218,5 +227,6 @@ Tool 결과로 표현하고 Agent가 최종 답변에서 안내한다.
 - Workflow: `apps/api/src/agent/agent-workflow.service.ts`
 - API E2E: `apps/api/test/agent.e2e-spec.ts`
 - 승인 실패 API E2E: `apps/api/test/approval-failure.e2e-spec.ts`
+- 승인 재전송 API E2E: `apps/api/test/approval-replay.e2e-spec.ts`
 - PostgreSQL 승인 통합 테스트: `apps/api/test/approval-workflow.integration-spec.ts`
 - 핵심 API→PostgreSQL E2E: `apps/api/test/agent-core-scenarios.integration-spec.ts`

@@ -28,6 +28,7 @@ export type AgentTraceEntry =
   | AgentApprovalTrace;
 
 export interface PendingApproval {
+  id: string;
   toolName: string;
   arguments: Record<string, unknown>;
 }
@@ -136,7 +137,11 @@ export function runAgent(
 
 export function resumeAgent(
   executionId: string,
+  approvalId: string,
   decision: ApprovalDecision,
 ): Promise<AgentRunResponse> {
-  return requestAgent(`/agent/runs/${executionId}/approval`, { decision });
+  return requestAgent(`/agent/runs/${executionId}/approval`, {
+    approvalId,
+    decision,
+  });
 }
