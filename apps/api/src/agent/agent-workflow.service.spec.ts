@@ -12,6 +12,14 @@ import type {
   AgentLlmResult,
 } from './llm/agent-llm-client';
 import { AgentWorkflowService } from './agent-workflow.service';
+import type { AgentRunResponse } from './contracts/agent-run-response';
+
+function approvalIdOf(response: AgentRunResponse): string {
+  if (response.status !== 'awaiting_approval') {
+    throw new Error('승인 대기 응답이 아닙니다.');
+  }
+  return response.approval.id;
+}
 
 class ScriptedLlmClient implements AgentLlmClient {
   readonly requests: AgentLlmRequest[] = [];
@@ -269,6 +277,7 @@ describe('AgentWorkflowService', () => {
       status: 'awaiting_approval',
       answer: null,
       approval: {
+        id: expect.any(String),
         toolName: 'create_follow_up_task',
         arguments: {
           customer_id: 'C001',
@@ -294,8 +303,10 @@ describe('AgentWorkflowService', () => {
     expect(llm.requests).toHaveLength(1);
 
     const [approved, concurrentDuplicate] = await Promise.all([
-      workflow.resume('execution-write-required', 'approve'),
-      workflow.resume('execution-write-required', 'approve'),
+      workflow.resume('execution-write-required', approvalIdOf(awaiting), 'approve'),
+      workflow.resume('execution-write-required', approvalIdOf(awaiting), 'approve'),
+      expect(workflow.resume('execution-write-required', 'another-id', 'approve'))
+        .rejects.toThrow('다른 승인 요청을 이미 처리하고 있습니다.'),
     ]);
 
     expect(approved.status).toBe('completed');
@@ -330,6 +341,7 @@ describe('AgentWorkflowService', () => {
 
     const sequentialDuplicate = await workflow.resume(
       'execution-write-required',
+      approvalIdOf(awaiting),
       'approve',
     );
 
@@ -362,13 +374,14 @@ describe('AgentWorkflowService', () => {
       createWriteToolRegistry(writer),
     );
 
-    await workflow.run(
+    const pendingRejected = await workflow.run(
       'execution-write-reject',
       '후속 업무를 만들어줘.',
       'required',
     );
     const rejected = await workflow.resume(
       'execution-write-reject',
+      approvalIdOf(pendingRejected),
       'reject',
     );
 
@@ -385,7 +398,7 @@ describe('AgentWorkflowService', () => {
     expect(llm.requests).toHaveLength(1);
 
     await expect(
-      workflow.resume('execution-write-reject', 'approve'),
+      workflow.resume('execution-write-reject', approvalIdOf(pendingRejected), 'approve'),
     ).rejects.toThrow('이미 반대 승인 결정이 적용된 실행입니다.');
   });
 
@@ -427,17 +440,17 @@ describe('AgentWorkflowService', () => {
       );
       const executionId = `execution-failed-${failureStage}`;
 
-      await workflow.run(executionId, '후속 업무를 만들어줘.');
-      await expect(workflow.resume(executionId, 'approve')).rejects.toThrow(
+      const pending = await workflow.run(executionId, '후속 업무를 만들어줘.');
+      await expect(workflow.resume(executionId, approvalIdOf(pending), 'approve')).rejects.toThrow(
         failureStage === 'tool'
           ? 'create_follow_up_task Tool 실행에 실패했습니다.'
           : '최종 응답 생성 실패',
       );
 
-      await expect(workflow.resume(executionId, 'approve')).rejects.toThrow(
+      await expect(workflow.resume(executionId, approvalIdOf(pending), 'approve')).rejects.toThrow(
         '이전 승인 실행이 완료되지 않았습니다.',
       );
-      await expect(workflow.resume(executionId, 'reject')).rejects.toThrow(
+      await expect(workflow.resume(executionId, approvalIdOf(pending), 'reject')).rejects.toThrow(
         '이미 반대 승인 결정이 적용된 실행입니다.',
       );
       expect(writeAttempts).toBe(1);
@@ -501,5 +514,51 @@ describe('AgentWorkflowService', () => {
       { sequence: 4, type: 'node', name: 'llm' },
     ]);
     expect(writer.inputs).toHaveLength(1);
+  });
+
+  it('첫 승인을 재전송해도 다음 Write를 승인하지 않는다', async () => {
+    const writer = new RecordingFollowUpTaskWriter();
+    const llm = new ScriptedLlmClient([
+      ...['첫 번째 업무', '두 번째 업무'].map((title, index): AgentLlmResult => ({
+        type: 'tool_call',
+        responseId: `response-multiple-${index}`,
+        toolCall: {
+          callId: `call-multiple-${index}`,
+          name: 'create_follow_up_task',
+          arguments: JSON.stringify({
+            customer_id: 'C001',
+            source_consultation_id: null,
+            title,
+            description: null,
+            due_at: null,
+          }),
+        },
+      })),
+      { type: 'final_answer', responseId: 'response-done', answer: '두 업무를 생성했습니다.' },
+    ]);
+    const workflow = new AgentWorkflowService(llm, createWriteToolRegistry(writer));
+    const firstApproval = await workflow.run('execution-multiple-writes', '후속 업무 두 개를 만들어줘.');
+    const firstApprovalId = approvalIdOf(firstApproval);
+
+    await expect(workflow.resume('execution-multiple-writes', 'wrong-id', 'approve'))
+      .rejects.toThrow('현재 승인 대상과 일치하지 않는 승인 ID입니다.');
+    expect(writer.inputs).toHaveLength(0);
+
+    const secondApproval = await workflow.resume('execution-multiple-writes', firstApprovalId, 'approve');
+    expect(secondApproval.status).toBe('awaiting_approval');
+    expect(approvalIdOf(secondApproval)).not.toBe(firstApprovalId);
+    expect(writer.inputs).toHaveLength(1);
+
+    await expect(workflow.resume('execution-multiple-writes', firstApprovalId, 'approve'))
+      .rejects.toThrow('현재 승인 대상과 일치하지 않는 승인 ID입니다.');
+    await expect(workflow.resume('execution-multiple-writes', firstApprovalId, 'reject'))
+      .rejects.toThrow('현재 승인 대상과 일치하지 않는 승인 ID입니다.');
+    expect(writer.inputs).toHaveLength(1);
+
+    const completed = await workflow.resume('execution-multiple-writes', approvalIdOf(secondApproval), 'approve');
+    expect(completed.status).toBe('completed');
+    expect(writer.inputs).toHaveLength(2);
+    expect(await workflow.resume('execution-multiple-writes', approvalIdOf(secondApproval), 'approve')).toEqual(completed);
+    expect(writer.inputs).toHaveLength(2);
   });
 });

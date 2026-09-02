@@ -27,9 +27,10 @@ export class AgentService {
 
   resume(
     executionId: string,
+    approvalId: string,
     decision: ApprovalDecision,
   ): Promise<AgentRunResponse> {
-    return this.workflow.resume(executionId, decision);
+    return this.workflow.resume(executionId, approvalId, decision);
   }
 
   private resolveWriteApprovalMode(

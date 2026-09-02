@@ -16,18 +16,25 @@ const validationPipe = new ValidationPipe({
   forbidNonWhitelisted: true,
   transform: true,
 });
+const approvalId = '5225e953-e55c-4e9c-9507-65d9d1d860b2';
 
 describe('ResumeAgentRequestDto', () => {
   it.each(['approve', 'reject'] as const)('%s 결정을 허용한다', async (decision) => {
     const result: unknown = await validationPipe.transform(
-      { decision },
+      { approvalId, decision },
       metadata,
     );
 
-    expect(result).toEqual({ decision });
+    expect(result).toEqual({ approvalId, decision });
   });
 
-  it.each([{ decision: 'later' }, {}, { decision: true }])(
+  it.each([
+    { approvalId, decision: 'later' },
+    { approvalId },
+    { approvalId, decision: true },
+    { decision: 'approve' },
+    { approvalId: 'invalid', decision: 'approve' },
+  ])(
     '지원하지 않는 결정을 거부한다: %p',
     async (payload) => {
       await expect(validationPipe.transform(payload, metadata)).rejects.toBeInstanceOf(

@@ -254,15 +254,19 @@ LLM이 Function Call을 반환하면 공통 Tool Registry가 해당 Tool을 실�
 그 결과를 다시 LLM에 전달합니다. Function Call이 없을 때 Workflow가 종료됩니다.
 
 Write Tool 요청의 기본 정책은 `required`입니다. 최초 응답이
-`awaiting_approval`이면 같은 `executionId`로 승인 또는 거절합니다.
+`awaiting_approval`이면 같은 `executionId`와 응답의 `approval.id`로 승인 또는 거절합니다.
+아래 `{executionId}`와 `{approval.id}`는 실제 응답의 값으로 바꿉니다.
 
 ```powershell
 Invoke-RestMethod `
   -Method Post `
   -Uri http://localhost:3000/agent/runs/{executionId}/approval `
   -ContentType 'application/json' `
-  -Body '{"decision":"approve"}'
+  -Body '{"approvalId":"{approval.id}","decision":"approve"}'
 ```
+
+한 실행에서 다음 Write가 제안되면 새 `approval.id`를 확인해야 합니다.
+이전 승인 ID의 재전송은 새 작업을 승인하지 않고 `409`로 거부됩니다.
 
 요청자가 `writeApprovalMode: "auto"`를 선택해도
 `AGENT_ALLOW_AUTO_WRITE=true`인 서버에서만 즉시 실행됩니다.

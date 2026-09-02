@@ -97,15 +97,18 @@ describe('승인 후 실패 응답 (e2e)', () => {
         .post('/agent/runs')
         .send({ message: '후속 업무를 만들어줘.' })
         .expect(200);
-      const executionId = (pending.body as { executionId: string }).executionId;
+      const { executionId, approval } = pending.body as {
+        executionId: string;
+        approval: { id: string };
+      };
 
       await request(server)
         .post(`/agent/runs/${executionId}/approval`)
-        .send({ decision: 'approve' })
+        .send({ approvalId: approval.id, decision: 'approve' })
         .expect(500);
       const repeated = await request(server)
         .post(`/agent/runs/${executionId}/approval`)
-        .send({ decision: 'approve' })
+        .send({ approvalId: approval.id, decision: 'approve' })
         .expect(409);
 
       expect(repeated.body).toHaveProperty(

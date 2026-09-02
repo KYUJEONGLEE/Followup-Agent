@@ -77,7 +77,9 @@ export function App() {
     setError(null);
 
     try {
-      setResponse(await resumeAgent(response.executionId, decision));
+      setResponse(
+        await resumeAgent(response.executionId, response.approval.id, decision),
+      );
     } catch (requestError) {
       setError(
         requestError instanceof Error

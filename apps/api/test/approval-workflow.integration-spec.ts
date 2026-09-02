@@ -120,8 +120,8 @@ describe('PostgreSQL Approval Workflow (integration)', () => {
     await expect(countTasks(executions.required)).resolves.toBe(0);
 
     const [approved, concurrentDuplicate] = await Promise.all([
-      workflow.resume(executions.required.executionId, 'approve'),
-      workflow.resume(executions.required.executionId, 'approve'),
+      workflow.resume(executions.required.executionId, pending.approval!.id, 'approve'),
+      workflow.resume(executions.required.executionId, pending.approval!.id, 'approve'),
     ]);
 
     expect(approved.status).toBe('completed');
@@ -130,6 +130,7 @@ describe('PostgreSQL Approval Workflow (integration)', () => {
 
     const duplicate = await workflow.resume(
       executions.required.executionId,
+      pending.approval!.id,
       'approve',
     );
 
@@ -142,13 +143,14 @@ describe('PostgreSQL Approval Workflow (integration)', () => {
       writeToolCall(executions.rejected.callId, '[integration] 거절 업무'),
     ]);
 
-    await workflow.run(
+    const pending = await workflow.run(
       executions.rejected.executionId,
       '거절할 후속 업무를 만들어줘.',
       'required',
     );
     const rejected = await workflow.resume(
       executions.rejected.executionId,
+      pending.approval!.id,
       'reject',
     );
 

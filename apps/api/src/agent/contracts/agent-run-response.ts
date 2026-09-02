@@ -25,6 +25,7 @@ export type AgentTraceEntry =
   | AgentApprovalTrace;
 
 export interface PendingApproval {
+  id: string;
   toolName: string;
   arguments: Record<string, unknown>;
 }

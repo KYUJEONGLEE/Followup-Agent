@@ -273,8 +273,9 @@ LLM Function Call
 
 | 값 | 역할 |
 |---|---|
-| `writeApprovalMode` | Backend가 최종 적용한 `required | auto` 정책 |
-| `approval.status` | `none | pending | approved | rejected` 상태 |
+| `writeApprovalMode` | Backend가 최종 적용한 `required \| auto` 정책 |
+| `approval.id` | 사용자가 확인한 승인 대상을 구분하는 서버 생성 UUID |
+| `approval.status` | `none \| pending \| approved \| rejected` 상태 |
 | `approval.toolName` | 승인 대상 Write Tool 이름 |
 | `approval.arguments` | 사용자에게 보여줄 실행 예정 인자 |
 
@@ -287,8 +288,9 @@ LLM Function Call
 - 기본값은 `required`다.
 - 요청자가 `auto`를 선택해도 서버의 `AGENT_ALLOW_AUTO_WRITE`가 허용해야 한다.
 - 승인 전에는 `execute_tool` Node로 이동하지 않는다.
-- 승인 재개는 기존 `executionId`에 저장된 pending 상태만 사용한다.
-- 순차·동시 중복 승인은 완료 응답 또는 같은 진행 중 작업을 공유해 재실행하지 않는다.
+- 승인 재개는 기존 `executionId`의 pending 상태와 요청의 `approvalId`가 일치할 때만 허용한다.
+- 같은 승인 ID와 결정의 중복 요청은 완료 응답 또는 같은 진행 중 작업을 공유해 재실행하지 않는다.
+- 다음 Write가 제안되면 새 승인 ID를 생성한다. 이전 승인 재전송은 409로 거부하므로 다음 Write를 승인하지 않는다.
 - Write Tool의 DB 멱등성 키가 동시·재시도 상황의 최종 중복 생성을 방지한다.
 
 ### 검증 결과

@@ -30,6 +30,10 @@ export class AgentController {
     executionId: string,
     @Body() request: ResumeAgentRequestDto,
   ): Promise<AgentRunResponse> {
-    return this.agentService.resume(executionId, request.decision);
+    return this.agentService.resume(
+      executionId,
+      request.approvalId,
+      request.decision,
+    );
   }
 }

@@ -15,6 +15,7 @@ import {
   StateSchema,
 } from '@langchain/langgraph';
 import { z } from 'zod/v4';
+import { randomUUID } from 'node:crypto';
 import { ToolRegistry } from '../tools/tool-registry';
 import type {
   AgentRunResponse,
@@ -65,6 +66,7 @@ const traceEntrySchema = z.discriminatedUnion('type', [
 ]);
 
 const approvalStateSchema = z.object({
+  id: z.string().uuid().nullable(),
   status: z.enum(['none', 'pending', 'approved', 'rejected']),
   mode: z.enum(['required', 'auto']).nullable(),
   toolName: z.string().nullable(),
@@ -72,6 +74,7 @@ const approvalStateSchema = z.object({
 });
 
 const emptyApprovalState = {
+  id: null,
   status: 'none',
   mode: null,
   toolName: null,
@@ -143,6 +146,7 @@ function createAgentGraph(
 
     return {
       approval: {
+        id: randomUUID(),
         status: 'pending',
         mode: 'required',
         toolName: state.pendingToolCall.name,
@@ -164,6 +168,7 @@ function createAgentGraph(
   const awaitApproval: GraphNode<typeof agentStateSchema> = (state) => {
     if (
       state.approval.status !== 'pending' ||
+      !state.approval.id ||
       !state.approval.toolName ||
       !state.approval.arguments
     ) {
@@ -171,6 +176,7 @@ function createAgentGraph(
     }
 
     const decision = interrupt<PendingApproval, ApprovalDecision>({
+      id: state.approval.id,
       toolName: state.approval.toolName,
       arguments: state.approval.arguments,
     });
@@ -213,6 +219,7 @@ function createAgentGraph(
 
     return {
       approval: {
+        id: null,
         status: 'approved',
         mode: 'auto',
         toolName: state.pendingToolCall.name,
@@ -294,7 +301,11 @@ export class AgentWorkflowService {
   private readonly graph: ReturnType<typeof createAgentGraph>;
   private readonly activeResumes = new Map<
     string,
-    { decision: ApprovalDecision; promise: Promise<AgentRunResponse> }
+    {
+      approvalId: string;
+      decision: ApprovalDecision;
+      promise: Promise<AgentRunResponse>;
+    }
   >();
 
   constructor(
@@ -323,39 +334,48 @@ export class AgentWorkflowService {
 
   resume(
     executionId: string,
+    approvalId: string,
     decision: ApprovalDecision,
   ): Promise<AgentRunResponse> {
     const activeResume = this.activeResumes.get(executionId);
 
     if (activeResume) {
-      if (activeResume.decision === decision) {
+      if (
+        activeResume.approvalId === approvalId &&
+        activeResume.decision === decision
+      ) {
         return activeResume.promise;
       }
 
       return Promise.reject(
-        new ConflictException('다른 승인 결정을 이미 처리하고 있습니다.'),
+        new ConflictException('다른 승인 요청을 이미 처리하고 있습니다.'),
       );
     }
 
-    const promise = this.resumeOnce(executionId, decision).finally(() => {
+    const promise = this.resumeOnce(executionId, approvalId, decision).finally(() => {
       if (this.activeResumes.get(executionId)?.promise === promise) {
         this.activeResumes.delete(executionId);
       }
     });
 
-    this.activeResumes.set(executionId, { decision, promise });
+    this.activeResumes.set(executionId, { approvalId, decision, promise });
 
     return promise;
   }
 
   private async resumeOnce(
     executionId: string,
+    approvalId: string,
     decision: ApprovalDecision,
   ): Promise<AgentRunResponse> {
     const { state } = await this.getState(executionId);
 
     if (state.approval.mode !== 'required') {
       throw new ConflictException('사용자 승인이 필요한 실행이 아닙니다.');
+    }
+
+    if (state.approval.id !== approvalId) {
+      throw new ConflictException('현재 승인 대상과 일치하지 않는 승인 ID입니다.');
     }
 
     if (state.approval.status !== 'pending') {
@@ -413,6 +433,7 @@ export class AgentWorkflowService {
   private toResponse(state: AgentWorkflowState): AgentRunResponse {
     if (
       state.approval.status === 'pending' &&
+      state.approval.id &&
       state.approval.toolName &&
       state.approval.arguments
     ) {
@@ -421,6 +442,7 @@ export class AgentWorkflowService {
         status: 'awaiting_approval',
         answer: null,
         approval: {
+          id: state.approval.id,
           toolName: state.approval.toolName,
           arguments: state.approval.arguments,
         },
