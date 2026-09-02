@@ -352,7 +352,7 @@ export class AgentWorkflowService {
     executionId: string,
     decision: ApprovalDecision,
   ): Promise<AgentRunResponse> {
-    const state = await this.getState(executionId);
+    const { state } = await this.getState(executionId);
 
     if (state.approval.mode !== 'required') {
       throw new ConflictException('사용자 승인이 필요한 실행이 아닙니다.');
@@ -363,10 +363,10 @@ export class AgentWorkflowService {
         state.approval.status === 'approved' ? 'approve' : 'reject';
 
       if (previousDecision === decision) {
-        return this.toResponse(state);
+        return this.getResponse(executionId);
       }
 
-      throw new ConflictException('이미 반대 승인 결정으로 완료된 실행입니다.');
+      throw new ConflictException('이미 반대 승인 결정이 적용된 실행입니다.');
     }
 
     await this.graph.invoke(
@@ -378,10 +378,21 @@ export class AgentWorkflowService {
   }
 
   private async getResponse(executionId: string): Promise<AgentRunResponse> {
-    return this.toResponse(await this.getState(executionId));
+    const { state, hasPendingNodes } = await this.getState(executionId);
+
+    if (hasPendingNodes && state.approval.status !== 'pending') {
+      throw new ConflictException(
+        '이전 승인 실행이 완료되지 않았습니다. 업무가 이미 생성됐을 수 있으니 실행 결과를 확인하세요.',
+      );
+    }
+
+    return this.toResponse(state);
   }
 
-  private async getState(executionId: string): Promise<AgentWorkflowState> {
+  private async getState(executionId: string): Promise<{
+    state: AgentWorkflowState;
+    hasPendingNodes: boolean;
+  }> {
     const snapshot = await this.graph.getState(
       this.createGraphConfig(executionId),
     );
@@ -393,7 +404,10 @@ export class AgentWorkflowService {
       );
     }
 
-    return parsed.data;
+    return {
+      state: parsed.data,
+      hasPendingNodes: snapshot.next.length > 0,
+    };
   }
 
   private toResponse(state: AgentWorkflowState): AgentRunResponse {
