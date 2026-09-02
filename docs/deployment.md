@@ -164,6 +164,33 @@ Web의 90초 요청 timeout 안내도 추가했다. Web timeout은 브라우저 
 이번 배포는 Blueprint 수동 동기화와 서비스 수동 배포로 완료했다.
 저장소 접근 경고가 배포 로그에 있었으므로 GitHub 연동과 자동 배포 동작은 별도 확인이 필요하다.
 
+### 2026-09-02 승인 재전송 수정 배포
+
+AGENT-24의 [PR #25](https://github.com/KYUJEONGLEE/Followup-Agent/pull/25)를 병합한 뒤
+API와 Web을 같은 커밋으로 수동 배포했다.
+
+- 배포 커밋: `fc24fe75555a11017668d5f6d2bc96cf4f0ede68`
+- API: `dep-dabslejtqb8s73deu350`, 16:07 KST `Live`
+- Web: `dep-dabslsgjo6nc738qcso0`, 16:06 KST 배포, `Live`
+- API 시작 로그: Migration 추가 적용 0건, Seed 성공, NestJS `PORT=10000` 수신
+- 공개 Health와 Web: 모두 HTTP 200
+- Web 번들: `/assets/index-CpzJCJvg.js`, `approvalId` 전송 코드 포함
+
+공개 Web에서 고객·상담 조회 후 승인 화면까지 진행하고 거절했으며,
+`rejected`와 Write Tool 실행 Trace 0건을 확인했다. 실제 API에서도 승인 ID 누락은 400,
+다른 ID는 409였고, 올바른 ID로 거절한 뒤 같은 요청을 재전송하면 동일한 `rejected`
+응답을 반환했다. 인사는 `llm` 한 단계로 완료됐다.
+
+연속 Write의 첫 승인을 재전송해도 두 번째 Write를 실행하지 않는 검증은
+모의 LLM·저장소를 연결한 실제 NestJS/LangGraph 회귀 테스트로 수행했다.
+공개 DB에서는 Write를 승인하지 않았다. 로컬 API 단위 60개, HTTP E2E 11개,
+Web 10개와 API/Web lint·build가 통과했다. 로컬 Docker 엔진이 실행되지 않아
+PostgreSQL 통합 테스트는 이 변경에서 재실행하지 못했다.
+
+승인 요청에는 이제 `approvalId`가 필수다. 배포 전에 열어둔 Web은 새로고침해야 하며,
+API 재시작 전의 승인 대기는 메모리 checkpoint이므로 다시 요청해야 한다.
+GitHub 앱 설치 권한은 아직 사용자 확인 대기이며, 자동 배포 성공을 검증한 것은 아니다.
+
 ## 무료 플랜 제약
 
 - Free Web Service는 15분 동안 요청이 없으면 중지되며 다음 요청의 기동에 시간이 걸릴 수 있다.

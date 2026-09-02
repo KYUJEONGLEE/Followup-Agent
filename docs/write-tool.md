@@ -98,16 +98,23 @@ Backend 정책이 최종 실행 모드를 결정해야 한다.
 요청자가 `auto`를 선택하더라도 `AGENT_ALLOW_AUTO_WRITE=true`일 때만
 실제 `auto`가 적용된다. 허용되지 않은 요청은 `required`로 낮춘다.
 
-승인 재개 Endpoint는 `executionId`로 checkpoint를 찾는다.
+승인 재개 Endpoint는 `executionId`로 checkpoint를 찾고, 사용자가 확인한
+응답의 `approval.id`와 요청의 `approvalId`가 일치하는지 검사한다.
 
 ```text
 POST /agent/runs/{executionId}/approval
-{ "decision": "approve" | "reject" }
+{ "approvalId": "응답의 approval.id", "decision": "approve" | "reject" }
 ```
 
-같은 승인 결정을 다시 보내면 이미 완료된 응답을 반환하고 Tool을 재실행하지 않는다.
-동시에 들어온 같은 승인도 한 프로세스 안에서는 하나의 재개 작업을 공유한다.
-반대 결정을 나중에 보내면 `409 Conflict`로 거부한다.
+같은 승인 ID와 결정을 다시 보내면 정상 종료된 응답을 반환하고 Tool을 재실행하지 않는다.
+동시에 들어온 같은 승인 ID와 결정도 한 프로세스 안에서는 하나의 재개 작업을 공유한다.
+다음 Write가 제안되면 새 승인 ID를 발급하므로 이전 승인 재전송은 다음 작업을 승인하지 않는다.
+승인 ID 누락·잘못된 형식은 `400`, 다른 승인 ID나 반대 결정은 `409 Conflict`로 거부한다.
+승인 이후 Tool 또는 LLM이 실패해 실행할 Node가 남아 있는 경우도 재승인 시 `409`로 응답하며,
+업무가 이미 생성됐을 수 있어 자동 재시도하지 않는다.
+
+승인 ID는 작업 구분용이며 사용자 인증·인가를 대신하지 않는다.
+상세 요청·응답과 오류 계약은 [Agent API 계약](./api-contract.md)을 기준으로 한다.
 
 현재 checkpointer는 `MemorySaver`이므로 단일 프로세스 MVP 검증 범위다.
 서버 재시작과 다중 인스턴스 환경에서는 PostgreSQL 또는 Redis 기반의
