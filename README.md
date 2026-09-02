@@ -230,6 +230,13 @@ PostgreSQL, OpenAI, LangGraph와 같은 외부 의존성의 준비 상태는 확
 `AGENT_ALLOW_AUTO_WRITE=false`를 유지해 Write Tool은 사용자 승인 후에만 실행합니다.
 배포 절차와 무료 플랜 제약은 [공개 데모 배포 문서](./docs/deployment.md)에 정리했습니다.
 
+- [공개 Web Demo](https://followup-agent-web.onrender.com)
+- [API Health](https://followup-agent-api.onrender.com/health)
+
+2026-09-01~02 KST에 공개 환경에서 Health, 고객·상담 조회, Tool 없는 인사,
+Write 승인 대기와 거절 경로를 확인했습니다. 무료 API 인스턴스가 중지된 뒤 첫 요청은
+기동에 시간이 걸릴 수 있습니다.
+
 ## Agent API
 
 Agent 실행은 동기식 `POST /agent/runs` 요청으로 시작합니다.
@@ -334,11 +341,11 @@ pnpm tsx experiments/tool-calling/index.ts
 - 승인 checkpoint는 프로세스 메모리에 저장되므로 서버 재시작과 다중 인스턴스를 지원하지 않음
 - `auto` 허용은 서버 전역 설정이며 사용자별 권한 체계는 아직 미구현
 - Web은 현재 실행 한 건만 표시하며 대화 Thread와 Streaming을 지원하지 않음
-- Render Blueprint는 준비됐지만 실제 공개 배포와 URL Smoke Test는 별도 확인 필요
+- Render 자동 배포 연결은 미검증이며, 이번 배포는 Dashboard의 수동 동기화·배포로 수행
 
 현재 Agent Backend MVP와 이를 직접 조작하는 최소 Web Demo를 완료했고,
-Render에서 재현할 공개 데모 구성을 준비했습니다. Blueprint를 실제 적용하고 공개 URL을
-검증한 뒤 RAG, 실패·timeout 정책과 GateLM 연동으로 확장합니다.
+Render Web/API/PostgreSQL 배포와 공개 URL 핵심 시나리오를 검증했습니다.
+현재는 확인된 버그를 수정하며 안정화하는 단계이고, RAG와 GateLM 연동은 후속 확장 범위입니다.
 
 ## 문서
 
