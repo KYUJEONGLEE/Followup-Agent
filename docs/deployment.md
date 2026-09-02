@@ -122,7 +122,47 @@ Web URL에서 다음 순서로 검증한다.
   `llm → get_customer → llm → get_consultations → llm` 실행 확인
 - 동일 IP의 여섯 번째 Agent 실행 요청이 `429`로 제한되는 E2E 확인
 
-공개 Render 배포와 공개 URL Smoke Test는 Blueprint를 실제 적용한 뒤 별도로 기록한다.
+## 공개 배포 검증 결과
+
+2026-09-01~02 KST에 다음 상태를 Render Dashboard와 공개 URL에서 확인했다.
+
+- 검증 커밋: `b9d5d0ffcd725b16a33a5eee29b04b0207c8e697`
+- API 배포: `dep-dabednfavr4c73flulc0`, `Live`
+- Web 배포: `dep-dabefpss728c73afgs10`, `Live`
+- [공개 Web](https://followup-agent-web.onrender.com): HTTP 200,
+  최신 번들의 `Public demo` 표시와 요청 timeout 안내 포함
+- [API Health](https://followup-agent-api.onrender.com/health): HTTP 200,
+  `{ "status": "ok" }`
+- API 시작 로그: production build 성공, Migration 1건 적용, Seed 성공,
+  NestJS 기동 및 `PORT=10000` 수신 확인
+
+공개 Web 브라우저에서 다음 경로를 실행했다. 이는 화면에서 실제 API 응답을 받았으므로
+Web의 API URL 설정과 CORS 연결도 함께 검증한 결과다.
+
+| 요청 | 확인한 결과 |
+|---|---|
+| 고객 기본 정보와 최근 상담 조회 | `llm → get_customer → llm → get_consultations → llm`, 두 Tool 결과를 반영한 답변 |
+| `안녕하세요.` | `llm` 한 단계로 완료, Tool 미사용 |
+| 후속 업무 생성 | `create_follow_up_task` 실행 전에 승인 화면 표시 |
+| 승인 화면에서 거절 | `rejected` 응답과 승인 거절 Trace, Write Tool 실행 Trace 없음 |
+
+승인 후 실제 업무 생성은 이번 공개 Smoke Test에서 실행하지 않았다.
+공개 DB에 검증용 업무를 남기지 않기 위해 승인 대기와 거절까지만 확인했다.
+
+### API 무응답의 확인된 원인과 수정
+
+공개 Web은 열렸지만 API는 응답하지 않았다. Render 배포 로그에서
+`NODE_ENV=production` 상태의 `pnpm install --frozen-lockfile`이 devDependencies를
+생략한 뒤 `nest: not found`로 빌드가 종료되는 것을 확인했다. API 프로세스가 시작되기 전
+빌드 단계의 실패였으며, DB 연결 실패를 최초 장애 원인으로 확인한 것은 아니다.
+
+API Build 명령에 `--prod=false`를 추가한 뒤 같은 production 환경에서 설치·빌드를 검증했고,
+Render에서도 빌드와 기동이 성공했다. 별도 방어 조치로 DB 연결 대기 상한·준비 재시도와
+Web의 90초 요청 timeout 안내도 추가했다. Web timeout은 브라우저 대기를 끝내는 기능이며
+이미 시작된 서버 Workflow의 취소를 보장하지 않는다.
+
+이번 배포는 Blueprint 수동 동기화와 서비스 수동 배포로 완료했다.
+저장소 접근 경고가 배포 로그에 있었으므로 GitHub 연동과 자동 배포 동작은 별도 확인이 필요하다.
 
 ## 무료 플랜 제약
 
