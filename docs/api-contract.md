@@ -153,9 +153,14 @@ Content-Type: application/json
 `approve`는 checkpoint에서 보류된 Write 호출을 재개한다.
 Tool 결과를 다시 LLM에 전달한 뒤 `completed` 응답을 반환한다.
 
-같은 `executionId`와 같은 결정을 다시 보내면 완료된 응답을 반환한다.
+같은 `executionId`와 같은 결정을 다시 보내면 정상 종료된 실행에 한해 완료된 응답을 반환한다.
 동시에 들어온 같은 결정은 한 프로세스 안에서 진행 중인 재개 작업을 공유하므로
 Write Tool과 LLM을 중복 실행하지 않는다.
+
+승인 이후 Tool 또는 최종 LLM 호출이 실패해 Graph에 실행할 Node가 남아 있으면,
+재승인 요청은 `completed`가 아닌 `409 Conflict`로 응답한다. 이때 업무가 이미 생성됐을
+수 있으므로 새 생성 요청을 반복하기 전에 실행 결과를 확인해야 한다.
+승인 API는 실패한 Node의 자동 재시도나 이미 수행된 Write의 롤백을 제공하지 않는다.
 
 ### 거절
 
@@ -182,7 +187,8 @@ Write Tool과 LLM을 중복 실행하지 않는다.
 - Tool 결과 원문, 내부 오류 Stack과 자격 증명은 Trace에 노출하지 않는다.
 
 승인 Trace와 Tool Trace는 분리한다.
-따라서 사용자가 승인했지만 Tool 실행이 실패한 상황도 구분할 수 있다.
+정상 응답에서는 사용자의 승인과 실제 Tool 실행을 각각 확인할 수 있다.
+시스템 예외의 HTTP 오류 응답에는 현재 Trace가 포함되지 않는다.
 
 ## 6. 승인 오류
 
@@ -190,7 +196,7 @@ Write Tool과 LLM을 중복 실행하지 않는다.
 |---:|---|
 | 400 | 잘못된 UUID, decision 또는 요청 필드 |
 | 404 | `executionId`에 해당하는 checkpoint 없음 |
-| 409 | 승인이 필요 없는 실행이거나 이미 반대 결정으로 완료됨 |
+| 409 | 승인이 필요 없는 실행, 반대 결정 처리 중·적용됨, 또는 이전 승인 실행이 미완료인 상태에서 재승인 |
 
 데이터 미존재는 시스템 오류가 아니다.
 Tool 결과로 표현하고 Agent가 최종 답변에서 안내한다.
@@ -211,5 +217,6 @@ Tool 결과로 표현하고 Agent가 최종 답변에서 안내한다.
 - 응답 계약: `apps/api/src/agent/contracts/agent-run-response.ts`
 - Workflow: `apps/api/src/agent/agent-workflow.service.ts`
 - API E2E: `apps/api/test/agent.e2e-spec.ts`
+- 승인 실패 API E2E: `apps/api/test/approval-failure.e2e-spec.ts`
 - PostgreSQL 승인 통합 테스트: `apps/api/test/approval-workflow.integration-spec.ts`
 - 핵심 API→PostgreSQL E2E: `apps/api/test/agent-core-scenarios.integration-spec.ts`

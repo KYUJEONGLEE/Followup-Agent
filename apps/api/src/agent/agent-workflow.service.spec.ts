@@ -17,7 +17,7 @@ class ScriptedLlmClient implements AgentLlmClient {
   readonly requests: AgentLlmRequest[] = [];
   private nextResultIndex = 0;
 
-  constructor(private readonly results: readonly AgentLlmResult[]) {}
+  constructor(private readonly results: readonly (AgentLlmResult | Error)[]) {}
 
   createResponse(request: AgentLlmRequest): Promise<AgentLlmResult> {
     this.requests.push(request);
@@ -26,6 +26,10 @@ class ScriptedLlmClient implements AgentLlmClient {
 
     if (!result) {
       throw new Error('준비된 LLM 응답이 없습니다.');
+    }
+
+    if (result instanceof Error) {
+      return Promise.reject(result);
     }
 
     return Promise.resolve(result);
@@ -382,8 +386,65 @@ describe('AgentWorkflowService', () => {
 
     await expect(
       workflow.resume('execution-write-reject', 'approve'),
-    ).rejects.toThrow('이미 반대 승인 결정으로 완료된 실행입니다.');
+    ).rejects.toThrow('이미 반대 승인 결정이 적용된 실행입니다.');
   });
+
+  it.each(['tool', 'final_answer'] as const)(
+    '승인 후 %s 단계가 실패하면 재승인을 완료로 오인하지 않는다',
+    async (failureStage) => {
+      const recordedWriter = new RecordingFollowUpTaskWriter();
+      let writeAttempts = 0;
+      const writer: FollowUpTaskWriter = {
+        create(input) {
+          writeAttempts += 1;
+          if (failureStage === 'tool') {
+            return Promise.reject(new Error('테스트 DB 연결 실패'));
+          }
+          return recordedWriter.create(input);
+        },
+      };
+      const llm = new ScriptedLlmClient([
+        {
+          type: 'tool_call',
+          responseId: 'response-failure-1',
+          toolCall: {
+            callId: 'call-failure-1',
+            name: 'create_follow_up_task',
+            arguments: JSON.stringify({
+              customer_id: 'C001',
+              source_consultation_id: null,
+              title: '실패 경로 검증',
+              description: null,
+              due_at: null,
+            }),
+          },
+        },
+        new Error('최종 응답 생성 실패'),
+      ]);
+      const workflow = new AgentWorkflowService(
+        llm,
+        createWriteToolRegistry(writer),
+      );
+      const executionId = `execution-failed-${failureStage}`;
+
+      await workflow.run(executionId, '후속 업무를 만들어줘.');
+      await expect(workflow.resume(executionId, 'approve')).rejects.toThrow(
+        failureStage === 'tool'
+          ? 'create_follow_up_task Tool 실행에 실패했습니다.'
+          : '최종 응답 생성 실패',
+      );
+
+      await expect(workflow.resume(executionId, 'approve')).rejects.toThrow(
+        '이전 승인 실행이 완료되지 않았습니다.',
+      );
+      await expect(workflow.resume(executionId, 'reject')).rejects.toThrow(
+        '이미 반대 승인 결정이 적용된 실행입니다.',
+      );
+      expect(writeAttempts).toBe(1);
+      expect(recordedWriter.inputs).toHaveLength(failureStage === 'tool' ? 0 : 1);
+      expect(llm.requests).toHaveLength(failureStage === 'tool' ? 1 : 2);
+    },
+  );
 
   it('auto Write는 승인 중단 없이 즉시 실행된다', async () => {
     const writer = new RecordingFollowUpTaskWriter();
